@@ -1,0 +1,1561 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Verifica Temperature — Farmacia Ascona</title>
+
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<!-- Firebase SDK (Compat v10) — stesso progetto dosettes-farmacia -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<!-- jsPDF per generazione PDF client-side -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+/* ── CSS VARIABLES — identiche a dosettes webapp ── */
+:root {
+  --bg: #F4F2EE;
+  --surface: #FFFFFF;
+  --surface2: #EDEAE4;
+  --border: #D8D4CC;
+  --text: #1A1916;
+  --text2: #6B6760;
+  --text3: #9E9A94;
+  --accent: #40916C;
+  --accent-light: #D8EDDF;
+  --accent-dark: #2D6A4F;
+  --danger: #C0392B;
+  --danger-light: #FDECEA;
+  --warning: #E67E22;
+  --warning-light: #FEF3E2;
+  --info: #2980B9;
+  --info-light: #EBF5FB;
+  --ok: #27AE60;
+  --ok-light: #EAFAF1;
+  --radius: 14px;
+  --radius-sm: 8px;
+  --shadow: 0 2px 12px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+  --font: 'DM Sans', -apple-system, sans-serif;
+  --mono: 'DM Mono', monospace;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box; margin: 0; padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app { display: flex; flex-direction: column; min-height: 100vh; }
+
+/* ── SCREENS ── */
+.screen { display: none; flex-direction: column; flex: 1; }
+.screen.active { display: flex; }
+
+/* ── HEADER ── */
+.header {
+  background: var(--accent-dark);
+  color: white;
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: sticky;
+  top: 0; z-index: 100;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+.header-back {
+  background: rgba(255,255,255,0.15);
+  border: none; color: white;
+  width: 38px; height: 38px;
+  border-radius: 50%; font-size: 18px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.2s;
+}
+.header-back:active { background: rgba(255,255,255,0.25); }
+.header-info { flex: 1; }
+.header-title { font-size: 17px; font-weight: 600; }
+.header-subtitle { font-size: 11px; opacity: 0.75; font-family: var(--mono); }
+.header-badge {
+  background: rgba(255,255,255,0.2);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--mono);
+}
+
+/* ── CONTENT ── */
+.content { padding: 20px; flex: 1; overflow-y: auto; max-width: 680px; width: 100%; margin: 0 auto; }
+
+/* ── CARDS ── */
+.card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin-bottom: 14px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+}
+.card-title {
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text3); margin-bottom: 14px;
+}
+
+/* ── BUTTONS ── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 8px; padding: 13px 22px;
+  border: none; border-radius: var(--radius);
+  font-size: 16px; font-weight: 600;
+  font-family: var(--font); cursor: pointer;
+  transition: all 0.15s; text-align: center;
+  width: 100%;
+}
+.btn:active { transform: scale(0.97); }
+.btn-primary { background: var(--accent); color: white; }
+.btn-primary:active { background: var(--accent-dark); }
+.btn-primary:disabled { background: var(--border); color: var(--text3); cursor: not-allowed; transform: none; }
+.btn-danger { background: var(--danger); color: white; }
+.btn-outline {
+  background: transparent; color: var(--accent);
+  border: 2px solid var(--accent);
+}
+.btn-ghost { background: var(--surface2); color: var(--text); }
+.btn-sm { padding: 9px 16px; font-size: 14px; border-radius: var(--radius-sm); width: auto; }
+
+/* ── FORM INPUTS ── */
+.form-group { margin-bottom: 14px; }
+.form-label {
+  display: block; font-size: 12px; font-weight: 600;
+  color: var(--text2); margin-bottom: 6px;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.form-input {
+  width: 100%; padding: 12px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 16px; font-family: var(--font);
+  background: var(--surface); color: var(--text);
+  transition: border-color 0.2s; outline: none;
+  -webkit-appearance: none;
+}
+.form-input:focus { border-color: var(--accent); }
+.form-input[readonly] { background: var(--surface2); color: var(--text2); }
+.form-textarea {
+  width: 100%; padding: 12px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 15px; font-family: var(--font);
+  background: var(--surface); color: var(--text);
+  resize: vertical; min-height: 80px;
+  outline: none; transition: border-color 0.2s;
+}
+.form-textarea:focus { border-color: var(--accent); }
+
+/* ── BADGE STATUS ── */
+.badge {
+  display: inline-block; font-size: 11px; font-weight: 700;
+  padding: 3px 10px; border-radius: 20px;
+  font-family: var(--mono); text-transform: uppercase;
+}
+.badge-ok { background: var(--ok-light); color: var(--ok); }
+.badge-nc { background: var(--danger-light); color: var(--danger); }
+.badge-warn { background: var(--warning-light); color: var(--warning); }
+.badge-gray { background: var(--surface2); color: var(--text2); }
+
+/* ════════════════════════════════════════════════════
+   SCREEN: LOGIN
+════════════════════════════════════════════════════ */
+#screen-login .content { padding-top: 40px; }
+
+.login-logo { text-align: center; margin-bottom: 32px; }
+.login-logo-icon {
+  width: 64px; height: 64px;
+  background: var(--accent-dark);
+  border-radius: 16px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 30px; margin-bottom: 12px;
+}
+.login-title { font-size: 24px; font-weight: 700; color: var(--accent-dark); }
+.login-subtitle { font-size: 14px; color: var(--text3); margin-top: 4px; }
+.login-form-name {
+  font-size: 13px; font-weight: 600;
+  color: var(--text2); margin-top: 6px;
+  font-family: var(--mono); letter-spacing: 0.05em;
+}
+
+/* Operator Grid */
+.op-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+.op-btn {
+  padding: 14px 10px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius);
+  font-family: var(--font);
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+}
+.op-btn:active, .op-btn.selected {
+  border-color: var(--accent);
+  background: var(--accent-light);
+}
+.op-initials {
+  display: block; font-size: 22px; font-weight: 800;
+  color: var(--accent); margin-bottom: 4px;
+}
+.op-btn.selected .op-initials { color: var(--accent-dark); }
+.op-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.op-role { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+/* PIN Pad */
+.pin-section { margin-top: 4px; }
+.pin-label { font-size: 13px; color: var(--text2); font-weight: 500; margin-bottom: 10px; text-align: center; }
+.pin-dots {
+  display: flex; gap: 14px; justify-content: center; margin-bottom: 18px;
+}
+.pin-dot {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--border); transition: background 0.15s;
+}
+.pin-dot.filled { background: var(--accent-dark); }
+
+.pin-pad {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 10px; max-width: 280px; margin: 0 auto;
+}
+.pin-key {
+  padding: 16px 10px; background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 22px; font-weight: 600;
+  font-family: var(--mono); cursor: pointer;
+  text-align: center; transition: all 0.15s;
+  color: var(--text);
+}
+.pin-key:active { background: var(--accent-light); border-color: var(--accent); transform: scale(0.95); }
+.pin-key.zero { grid-column: 2; }
+.pin-key.del {
+  font-size: 18px; color: var(--danger);
+  border-color: var(--danger-light); background: var(--danger-light);
+}
+
+.pin-error {
+  text-align: center; color: var(--danger);
+  font-size: 14px; font-weight: 600;
+  margin-top: 12px; min-height: 20px;
+}
+
+/* Loading state */
+.loading-state { text-align: center; padding: 40px 20px; }
+.loading-spinner {
+  width: 40px; height: 40px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 16px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ════════════════════════════════════════════════════
+   SCREEN: FORM
+════════════════════════════════════════════════════ */
+
+/* Info row */
+.info-row {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 10px; margin-bottom: 14px;
+}
+.info-cell {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+}
+.info-cell-label { font-size: 11px; color: var(--text3); font-weight: 600; text-transform: uppercase; }
+.info-cell-value { font-size: 16px; font-weight: 600; color: var(--text); font-family: var(--mono); margin-top: 2px; }
+
+/* Zona card */
+.zona-card {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px; margin-bottom: 12px;
+  box-shadow: var(--shadow);
+  transition: border-color 0.2s;
+}
+.zona-card.stato-ok { border-color: var(--ok); }
+.zona-card.stato-nc { border-color: var(--danger); }
+
+.zona-header {
+  display: flex; align-items: center;
+  justify-content: space-between; margin-bottom: 14px;
+}
+.zona-nome { font-size: 15px; font-weight: 700; color: var(--text); }
+.zona-range { font-size: 11px; color: var(--text3); font-family: var(--mono); }
+
+.zona-grid {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px; margin-bottom: 10px;
+}
+.zona-field label {
+  display: block; font-size: 10px; font-weight: 700;
+  color: var(--text3); text-transform: uppercase;
+  letter-spacing: 0.06em; margin-bottom: 4px;
+}
+.zona-input {
+  width: 100%; padding: 10px 10px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 17px; font-weight: 600;
+  font-family: var(--mono); text-align: center;
+  background: var(--surface); color: var(--text);
+  outline: none; transition: border-color 0.2s;
+  -webkit-appearance: none;
+}
+.zona-input:focus { border-color: var(--accent); }
+.zona-delta {
+  padding: 10px 10px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 17px; font-weight: 700;
+  font-family: var(--mono); text-align: center;
+  background: var(--surface2); color: var(--text2);
+  transition: all 0.2s;
+}
+.zona-delta.delta-ok { background: var(--ok-light); color: var(--ok); border-color: var(--ok); }
+.zona-delta.delta-nc { background: var(--danger-light); color: var(--danger); border-color: var(--danger); }
+
+/* NC Section */
+.nc-section {
+  display: none;
+  background: var(--danger-light);
+  border: 1.5px solid var(--danger);
+  border-radius: var(--radius);
+  padding: 16px; margin-bottom: 14px;
+}
+.nc-section.visible { display: block; }
+.nc-banner {
+  display: flex; align-items: center; gap: 8px;
+  color: var(--danger); font-weight: 700; font-size: 15px;
+  margin-bottom: 12px;
+}
+
+/* Toggle NC override */
+.nc-override {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 0; cursor: pointer;
+}
+.nc-override input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--danger); cursor: pointer; }
+.nc-override-label { font-size: 14px; color: var(--text); font-weight: 500; }
+
+/* ════════════════════════════════════════════════════
+   SCREEN: FIRMA
+════════════════════════════════════════════════════ */
+.firma-header-card {
+  background: var(--accent-dark);
+  color: white;
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-bottom: 14px;
+}
+.firma-header-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+.firma-header-sub { font-size: 13px; opacity: 0.8; }
+
+.firma-preview {
+  background: var(--surface2);
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-sm);
+  min-height: 80px;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 14px; overflow: hidden;
+}
+.firma-preview img { max-height: 80px; max-width: 100%; object-fit: contain; }
+.firma-preview-placeholder { color: var(--text3); font-size: 14px; }
+
+/* ════════════════════════════════════════════════════
+   SCREEN: SUCCESS
+════════════════════════════════════════════════════ */
+.success-icon {
+  width: 80px; height: 80px;
+  background: var(--ok-light);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 40px; margin: 0 auto 20px;
+}
+.success-title { font-size: 22px; font-weight: 700; color: var(--ok); text-align: center; margin-bottom: 8px; }
+.success-sub { font-size: 15px; color: var(--text2); text-align: center; margin-bottom: 28px; }
+
+.summary-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.summary-table td { padding: 8px 6px; border-bottom: 1px solid var(--border); }
+.summary-table td:first-child { color: var(--text2); font-weight: 600; width: 45%; }
+.summary-table td:last-child { font-family: var(--mono); font-weight: 600; }
+.summary-table tr:last-child td { border-bottom: none; }
+
+/* ── TOAST ── */
+.toast-container { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 9999; }
+.toast {
+  background: var(--text); color: white;
+  padding: 12px 20px; border-radius: 30px;
+  font-size: 14px; font-weight: 500;
+  box-shadow: var(--shadow-lg);
+  white-space: nowrap; opacity: 0;
+  transition: opacity 0.3s;
+}
+.toast.show { opacity: 1; }
+.toast.toast-ok { background: var(--ok); }
+.toast.toast-error { background: var(--danger); }
+.toast.toast-warn { background: var(--warning); }
+
+/* ── DIVIDER ── */
+.divider { height: 1px; background: var(--border); margin: 16px 0; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ════════════════════════════════════
+       SCREEN 1 — LOGIN
+  ════════════════════════════════════ -->
+  <div id="screen-login" class="screen active">
+    <div class="content">
+
+      <div class="login-logo">
+        <div class="login-logo-icon">🌡️</div>
+        <div class="login-title">Farmacia Ascona</div>
+        <div class="login-subtitle">Sistema Qualità — QMS</div>
+        <div class="login-form-name">FA-SQ-T-01 · Verifica Mensile Temperature</div>
+      </div>
+
+      <!-- Loading stato iniziale -->
+      <div id="login-loading" class="loading-state">
+        <div class="loading-spinner"></div>
+        <p style="color:var(--text2);font-size:14px">Caricamento operatori...</p>
+      </div>
+
+      <!-- Grid operatori (si popola da Firestore) -->
+      <div id="login-content" style="display:none">
+        <div class="card">
+          <div class="card-title">Seleziona operatore</div>
+          <div class="op-grid" id="op-grid"></div>
+
+          <div class="pin-section" id="pin-section" style="display:none">
+            <div class="pin-label" id="pin-label">PIN accesso (4 cifre)</div>
+            <div class="pin-dots">
+              <div class="pin-dot" id="dot0"></div>
+              <div class="pin-dot" id="dot1"></div>
+              <div class="pin-dot" id="dot2"></div>
+              <div class="pin-dot" id="dot3"></div>
+            </div>
+            <div class="pin-pad">
+              <button class="pin-key" onclick="pinTap('1')">1</button>
+              <button class="pin-key" onclick="pinTap('2')">2</button>
+              <button class="pin-key" onclick="pinTap('3')">3</button>
+              <button class="pin-key" onclick="pinTap('4')">4</button>
+              <button class="pin-key" onclick="pinTap('5')">5</button>
+              <button class="pin-key" onclick="pinTap('6')">6</button>
+              <button class="pin-key" onclick="pinTap('7')">7</button>
+              <button class="pin-key" onclick="pinTap('8')">8</button>
+              <button class="pin-key" onclick="pinTap('9')">9</button>
+              <button class="pin-key zero" onclick="pinTap('0')">0</button>
+              <button class="pin-key del" onclick="pinDel()">⌫</button>
+            </div>
+            <div class="pin-error" id="pin-error"></div>
+          </div>
+        </div>
+
+        <p style="font-size:12px;color:var(--text3);text-align:center;margin-top:8px">
+          Versione: <span style="font-family:var(--mono)">FA-SQ-T-01 · Rev.2</span>
+        </p>
+      </div>
+
+    </div>
+  </div><!-- /screen-login -->
+
+
+  <!-- ════════════════════════════════════
+       SCREEN 2 — FORM
+  ════════════════════════════════════ -->
+  <div id="screen-form" class="screen">
+    <div class="header">
+      <button class="header-back" onclick="goBack('screen-login')">‹</button>
+      <div class="header-info">
+        <div class="header-title">Verifica Temperature</div>
+        <div class="header-subtitle" id="header-op-name">—</div>
+      </div>
+      <div class="header-badge" id="header-mese">—</div>
+    </div>
+    <div class="content">
+
+      <!-- Info date/ora -->
+      <div class="info-row">
+        <div class="info-cell">
+          <div class="info-cell-label">Data</div>
+          <div class="info-cell-value" id="form-data">—</div>
+        </div>
+        <div class="info-cell">
+          <div class="info-cell-label">Ora</div>
+          <div class="info-cell-value" id="form-ora">—</div>
+        </div>
+      </div>
+      <div class="info-row" style="margin-bottom:18px">
+        <div class="info-cell">
+          <div class="info-cell-label">Mese di controllo</div>
+          <div class="info-cell-value" id="form-mese">—</div>
+        </div>
+        <div class="info-cell">
+          <div class="info-cell-label">Documento</div>
+          <div class="info-cell-value" style="font-size:12px">FA-SQ-T-01</div>
+        </div>
+      </div>
+
+      <!-- ZONA 1: Frigo Magazzino -->
+      <div class="zona-card" id="zona-card-0">
+        <div class="zona-header">
+          <div>
+            <div class="zona-nome">❄️ Frigo Magazzino</div>
+            <div class="zona-range">Range ammesso: 2 – 8 °C · Δ max 0.5 °C</div>
+          </div>
+          <span class="badge badge-gray" id="zona-badge-0">—</span>
+        </div>
+        <div class="zona-grid">
+          <div class="zona-field">
+            <label>Sensore SmartLife (°C)</label>
+            <input type="number" step="0.1" class="zona-input" id="t-sens-0"
+              placeholder="—" oninput="calcDelta(0)" inputmode="decimal">
+          </div>
+          <div class="zona-field">
+            <label>Termometro Rif. (°C)</label>
+            <input type="number" step="0.1" class="zona-input" id="t-rif-0"
+              placeholder="—" oninput="calcDelta(0)" inputmode="decimal">
+          </div>
+          <div class="zona-field">
+            <label>Delta |Δ| (°C)</label>
+            <div class="zona-delta" id="delta-0">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ZONA 2: Magazzino (Back) -->
+      <div class="zona-card" id="zona-card-1">
+        <div class="zona-header">
+          <div>
+            <div class="zona-nome">📦 Magazzino (Back)</div>
+            <div class="zona-range">Range ammesso: 15 – 25 °C · Δ max 1.0 °C</div>
+          </div>
+          <span class="badge badge-gray" id="zona-badge-1">—</span>
+        </div>
+        <div class="zona-grid">
+          <div class="zona-field">
+            <label>Sensore SmartLife (°C)</label>
+            <input type="number" step="0.1" class="zona-input" id="t-sens-1"
+              placeholder="—" oninput="calcDelta(1)" inputmode="decimal">
+          </div>
+          <div class="zona-field">
+            <label>Termometro Rif. (°C)</label>
+            <input type="number" step="0.1" class="zona-input" id="t-rif-1"
+              placeholder="—" oninput="calcDelta(1)" inputmode="decimal">
+          </div>
+          <div class="zona-field">
+            <label>Delta |Δ| (°C)</label>
+            <div class="zona-delta" id="delta-1">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ZONA 3: Reparto Vendita (Front) -->
+      <div class="zona-card" id="zona-card-2">
+        <div class="zona-header">
+          <div>
+            <div class="zona-nome">🏪 Reparto Vendita (Front)</div>
+            <div class="zona-range">Range ammesso: 15 – 25 °C · Δ max 1.0 °C</div>
+          </div>
+          <span class="badge badge-gray" id="zona-badge-2">—</span>
+        </div>
+        <div class="zona-grid">
+          <div class="zona-field">
+            <label>Sensore SmartLife (°C)</label>
+            <input type="number" step="0.1" class="zona-input" id="t-sens-2"
+              placeholder="—" oninput="calcDelta(2)" inputmode="decimal">
+          </div>
+          <div class="zona-field">
+            <label>Termometro Rif. (°C)</label>
+            <input type="number" step="0.1" class="zona-input" id="t-rif-2"
+              placeholder="—" oninput="calcDelta(2)" inputmode="decimal">
+          </div>
+          <div class="zona-field">
+            <label>Delta |Δ| (°C)</label>
+            <div class="zona-delta" id="delta-2">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sezione NC (appare solo se NC rilevata) -->
+      <div class="nc-section" id="nc-section">
+        <div class="nc-banner">⚠️ Non Conformità rilevata</div>
+        <div class="form-group">
+          <label class="form-label">Zona/e interessata/e</label>
+          <input type="text" class="form-input" id="nc-zona" readonly>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Descrizione anomalia</label>
+          <textarea class="form-textarea" id="nc-descrizione"
+            placeholder="Descrivere brevemente l'anomalia rilevata..."></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Azione correttiva immediata</label>
+          <textarea class="form-textarea" id="nc-azione"
+            placeholder="Azione intrapresa (es: trasferimento prodotti, verifica sensore, contatto tecnico...)"></textarea>
+        </div>
+        <div style="padding:8px 0;border-top:1px solid rgba(192,57,43,0.2);margin-top:4px">
+          <p style="font-size:12px;color:var(--danger)">
+            ⚠️ Se la NC persiste, aprire una segnalazione formale con <strong>FA-SQ-NC-01</strong>
+          </p>
+        </div>
+      </div>
+
+      <!-- Override manuale NC (se operatore vuole segnalare comunque) -->
+      <div class="card">
+        <label class="nc-override" for="nc-manual-check">
+          <input type="checkbox" id="nc-manual-check" onchange="toggleManualNc()">
+          <span class="nc-override-label">Segnalare comunque un'osservazione / NC non rilevata automaticamente</span>
+        </label>
+      </div>
+
+      <!-- Note libere -->
+      <div class="card">
+        <div class="card-title">Note aggiuntive (opzionale)</div>
+        <textarea class="form-textarea" id="form-note"
+          placeholder="Eventuali osservazioni libere..."></textarea>
+      </div>
+
+      <button class="btn btn-primary" id="btn-procedi" onclick="procediAFirma()" disabled>
+        ✍️ Procedi alla firma
+      </button>
+      <div style="height:40px"></div>
+
+    </div>
+  </div><!-- /screen-form -->
+
+
+  <!-- ════════════════════════════════════
+       SCREEN 3 — FIRMA
+  ════════════════════════════════════ -->
+  <div id="screen-firma" class="screen">
+    <div class="header">
+      <button class="header-back" onclick="goBack('screen-form')">‹</button>
+      <div class="header-info">
+        <div class="header-title">Firma e Convalida</div>
+        <div class="header-subtitle" id="firma-op-name">—</div>
+      </div>
+    </div>
+    <div class="content">
+
+      <div class="firma-header-card">
+        <div class="firma-header-title">Convalida con PIN firma (5 cifre)</div>
+        <div class="firma-header-sub">Il PIN firma è diverso dal PIN di accesso</div>
+      </div>
+
+      <!-- Anteprima firma -->
+      <div class="card">
+        <div class="card-title">Firma registrata</div>
+        <div class="firma-preview" id="firma-preview">
+          <span class="firma-preview-placeholder">Nessuna firma registrata</span>
+        </div>
+        <p style="font-size:12px;color:var(--text3)">
+          Per aggiungere o modificare la firma usa il pannello QMS Admin.
+        </p>
+      </div>
+
+      <!-- PIN Firma (5 cifre) -->
+      <div class="card">
+        <div class="card-title">PIN firma</div>
+        <div class="pin-dots" id="firma-dots-container">
+          <div class="pin-dot" id="fdot0"></div>
+          <div class="pin-dot" id="fdot1"></div>
+          <div class="pin-dot" id="fdot2"></div>
+          <div class="pin-dot" id="fdot3"></div>
+          <div class="pin-dot" id="fdot4"></div>
+        </div>
+        <div class="pin-pad">
+          <button class="pin-key" onclick="firmaPinTap('1')">1</button>
+          <button class="pin-key" onclick="firmaPinTap('2')">2</button>
+          <button class="pin-key" onclick="firmaPinTap('3')">3</button>
+          <button class="pin-key" onclick="firmaPinTap('4')">4</button>
+          <button class="pin-key" onclick="firmaPinTap('5')">5</button>
+          <button class="pin-key" onclick="firmaPinTap('6')">6</button>
+          <button class="pin-key" onclick="firmaPinTap('7')">7</button>
+          <button class="pin-key" onclick="firmaPinTap('8')">8</button>
+          <button class="pin-key" onclick="firmaPinTap('9')">9</button>
+          <button class="pin-key zero" onclick="firmaPinTap('0')">0</button>
+          <button class="pin-key del" onclick="firmaPinDel()">⌫</button>
+        </div>
+        <div class="pin-error" id="firma-pin-error"></div>
+      </div>
+
+      <button class="btn btn-primary" id="btn-firma-confirm" onclick="confermaFirma()" disabled>
+        ✅ Conferma e genera PDF
+      </button>
+      <div style="height:40px"></div>
+
+    </div>
+  </div><!-- /screen-firma -->
+
+
+  <!-- ════════════════════════════════════
+       SCREEN 4 — SUCCESS
+  ════════════════════════════════════ -->
+  <div id="screen-success" class="screen">
+    <div class="header">
+      <div class="header-info">
+        <div class="header-title">Verifica Completata</div>
+        <div class="header-subtitle">FA-SQ-T-01</div>
+      </div>
+    </div>
+    <div class="content" style="padding-top:40px">
+      <div class="success-icon">✅</div>
+      <div class="success-title">Registrazione salvata</div>
+      <div class="success-sub" id="success-sub">Record archiviato correttamente</div>
+
+      <div class="card">
+        <div class="card-title">Riepilogo verifica</div>
+        <table class="summary-table" id="summary-table"></table>
+      </div>
+
+      <button class="btn btn-primary" onclick="downloadPdf()" style="margin-bottom:12px">
+        ⬇️ Scarica PDF firmato
+      </button>
+      <button class="btn btn-outline" onclick="nuovaVerifica()">
+        ↩ Nuova verifica
+      </button>
+      <div style="height:40px"></div>
+    </div>
+  </div><!-- /screen-success -->
+
+</div><!-- /app -->
+
+<!-- Toast container -->
+<div class="toast-container">
+  <div class="toast" id="toast"></div>
+</div>
+
+
+<!-- ════════════════════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════════════════════ -->
+<script>
+'use strict';
+
+// ─────────────────────────────────────────────
+// CONFIGURAZIONE FIREBASE
+// Stesso progetto dosettes-farmacia (eur3 — nLPD)
+// ─────────────────────────────────────────────
+var FIREBASE_ENABLED = true;
+var firebaseConfig = {
+  apiKey:            'AIzaSyD9McwYWAkmF7MY3twDfCu0ECU3WujYArc',
+  authDomain:        'dosettes-farmacia.firebaseapp.com',
+  projectId:         'dosettes-farmacia',
+  storageBucket:     'dosettes-farmacia.firebasestorage.app',
+  messagingSenderId: '628957359401',
+  appId:             '1:628957359401:web:7061c0a375b82288e45b38'
+};
+
+var firestoreDB = null;
+try {
+  firebase.initializeApp(firebaseConfig);
+  firestoreDB = firebase.firestore();
+} catch(e) {
+  console.error('Errore init Firebase:', e.message);
+  FIREBASE_ENABLED = false;
+}
+
+// ─────────────────────────────────────────────
+// OPERATORI — fallback hardcoded (se Firestore offline)
+// Sostituiti dai dati Firestore se disponibili
+// ─────────────────────────────────────────────
+var OPERATORI_FALLBACK = [
+  { sigla:'DBC', nome:'D. Biasca-Caroni', ruolo:'Farmacista Titolare', pinHash:null, pinFirmaHash:null, signatureB64:null, attivo:true },
+  { sigla:'VA',  nome:'Valentina',        ruolo:'Farmacista',          pinHash:null, pinFirmaHash:null, signatureB64:null, attivo:true },
+  { sigla:'GL',  nome:'Giulia Luna',      ruolo:'Farmacista',          pinHash:null, pinFirmaHash:null, signatureB64:null, attivo:true },
+  { sigla:'MA',  nome:'Martina',          ruolo:'Assistente',          pinHash:null, pinFirmaHash:null, signatureB64:null, attivo:true },
+];
+var OPERATORI = OPERATORI_FALLBACK.slice();
+
+// ─────────────────────────────────────────────
+// CONFIGURAZIONE ZONE
+// ─────────────────────────────────────────────
+var ZONE = [
+  { nome: 'Frigo Magazzino',    minT: 2.0,  maxT: 8.0,  maxDelta: 0.5 },
+  { nome: 'Magazzino (Back)',   minT: 15.0, maxT: 25.0, maxDelta: 1.0 },
+  { nome: 'Reparto Vendita (Front)', minT: 15.0, maxT: 25.0, maxDelta: 1.0 },
+];
+
+// ─────────────────────────────────────────────
+// STATO APPLICAZIONE
+// ─────────────────────────────────────────────
+var state = {
+  operatoreCorrente: null,
+  pinBuffer: '',
+  firmaPinBuffer: '',
+  formData: {},
+  pdfDoc: null,       // jsPDF instance
+  firestoreId: null,  // ID documento salvato
+};
+
+// ─────────────────────────────────────────────
+// SHA-256 (Web Crypto API nativa)
+// Mai loggare in console
+// ─────────────────────────────────────────────
+async function sha256(message) {
+  var msgBuffer = new TextEncoder().encode(message);
+  var hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  var hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(function(b){ return b.toString(16).padStart(2, '0'); }).join('');
+}
+
+// ─────────────────────────────────────────────
+// UTILITY — Data e ora
+// ─────────────────────────────────────────────
+function padZ(n) { return String(n).padStart(2, '0'); }
+
+function getDataOra() {
+  var now = new Date();
+  var data = padZ(now.getDate()) + '.' + padZ(now.getMonth()+1) + '.' + now.getFullYear();
+  var ora  = padZ(now.getHours()) + ':' + padZ(now.getMinutes());
+  var mese = [
+    'Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+    'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'
+  ][now.getMonth()] + ' ' + now.getFullYear();
+  var isoMese = now.getFullYear() + '-' + padZ(now.getMonth()+1);
+  return { data, ora, mese, isoMese, now };
+}
+
+// ─────────────────────────────────────────────
+// INIT — Carica operatori da Firestore
+// ─────────────────────────────────────────────
+function init() {
+  if (!FIREBASE_ENABLED || !firestoreDB) {
+    renderOperatoriLogin(OPERATORI_FALLBACK);
+    return;
+  }
+  firestoreDB.collection('operatori').get()
+    .then(function(snapshot) {
+      var loaded = [];
+      snapshot.forEach(function(doc){ loaded.push(doc.data()); });
+      if (loaded.length > 0) {
+        OPERATORI = loaded.filter(function(o){ return o.attivo !== false; });
+      } else {
+        OPERATORI = OPERATORI_FALLBACK.slice();
+        showToast('Operatori locali in uso (Firestore vuoto)', 'warn');
+      }
+      renderOperatoriLogin(OPERATORI);
+    })
+    .catch(function(e) {
+      console.error('Errore caricamento operatori:', e.code);
+      OPERATORI = OPERATORI_FALLBACK.slice();
+      showToast('Modalità offline — operatori locali', 'warn');
+      renderOperatoriLogin(OPERATORI);
+    });
+}
+
+function renderOperatoriLogin(operatori) {
+  document.getElementById('login-loading').style.display = 'none';
+  document.getElementById('login-content').style.display = 'block';
+
+  var grid = document.getElementById('op-grid');
+  grid.innerHTML = '';
+  operatori.forEach(function(op) {
+    var btn = document.createElement('button');
+    btn.className = 'op-btn';
+    btn.dataset.sigla = op.sigla;
+    // Iniziali: prime 2 lettere della sigla
+    var initials = op.sigla.substring(0, 2).toUpperCase();
+    btn.innerHTML =
+      '<span class="op-initials">' + initials + '</span>' +
+      '<span class="op-name">' + op.nome + '</span>' +
+      '<span class="op-role">' + (op.ruolo || '') + '</span>';
+    btn.addEventListener('click', function(){ selezionaOperatore(op, btn); });
+    grid.appendChild(btn);
+  });
+}
+
+// ─────────────────────────────────────────────
+// LOGIN — Selezione operatore
+// ─────────────────────────────────────────────
+function selezionaOperatore(op, btn) {
+  // Deselect tutti
+  document.querySelectorAll('.op-btn').forEach(function(b){ b.classList.remove('selected'); });
+  btn.classList.add('selected');
+  state.operatoreCorrente = op;
+  state.pinBuffer = '';
+  document.getElementById('pin-section').style.display = 'block';
+  aggiornaDotsLogin();
+  document.getElementById('pin-error').textContent = '';
+}
+
+// ─────────────────────────────────────────────
+// LOGIN — PIN Pad (4 cifre)
+// ─────────────────────────────────────────────
+function pinTap(digit) {
+  if (!state.operatoreCorrente) return;
+  if (state.pinBuffer.length >= 4) return;
+  state.pinBuffer += digit;
+  aggiornaDotsLogin();
+  if (state.pinBuffer.length === 4) {
+    verificaPin();
+  }
+}
+
+function pinDel() {
+  state.pinBuffer = state.pinBuffer.slice(0, -1);
+  aggiornaDotsLogin();
+  document.getElementById('pin-error').textContent = '';
+}
+
+function aggiornaDotsLogin() {
+  for (var i = 0; i < 4; i++) {
+    var dot = document.getElementById('dot' + i);
+    dot.classList.toggle('filled', i < state.pinBuffer.length);
+  }
+}
+
+async function verificaPin() {
+  var op = state.operatoreCorrente;
+  var pinOk = false;
+
+  if (op.pinHash) {
+    var h = await sha256(state.pinBuffer);
+    pinOk = (h === op.pinHash);
+  } else {
+    // Fallback: confronto diretto (solo in offline/demo)
+    pinOk = (state.pinBuffer === (op.pin || ''));
+  }
+
+  if (pinOk) {
+    // Accesso OK — vai alla form
+    avviaForm();
+  } else {
+    document.getElementById('pin-error').textContent = 'PIN non corretto — riprova';
+    state.pinBuffer = '';
+    aggiornaDotsLogin();
+    // Vibrazione su mobile
+    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+  }
+}
+
+// ─────────────────────────────────────────────
+// FORM — Inizializzazione
+// ─────────────────────────────────────────────
+function avviaForm() {
+  var dt = getDataOra();
+  state.formData = {
+    data: dt.data, ora: dt.ora,
+    mese: dt.mese, isoMese: dt.isoMese,
+    operatore: state.operatoreCorrente.sigla,
+    operatoreNome: state.operatoreCorrente.nome,
+    zone: [ {}, {}, {} ],
+    nc: false, ncZone: '', ncDescrizione: '', ncAzione: '',
+    note: '',
+    timestampCreazione: new Date().toISOString(),
+  };
+
+  document.getElementById('form-data').textContent = dt.data;
+  document.getElementById('form-ora').textContent  = dt.ora;
+  document.getElementById('form-mese').textContent = dt.mese;
+  document.getElementById('header-mese').textContent = dt.isoMese;
+  document.getElementById('header-op-name').textContent = state.operatoreCorrente.nome;
+
+  // Reset campi
+  for (var i = 0; i < 3; i++) {
+    document.getElementById('t-sens-' + i).value = '';
+    document.getElementById('t-rif-' + i).value  = '';
+    document.getElementById('delta-' + i).textContent = '—';
+    document.getElementById('delta-' + i).className = 'zona-delta';
+    document.getElementById('zona-badge-' + i).textContent = '—';
+    document.getElementById('zona-badge-' + i).className = 'badge badge-gray';
+    document.getElementById('zona-card-' + i).className = 'zona-card';
+  }
+  document.getElementById('nc-section').classList.remove('visible');
+  document.getElementById('nc-manual-check').checked = false;
+  document.getElementById('nc-zona').value = '';
+  document.getElementById('nc-descrizione').value = '';
+  document.getElementById('nc-azione').value = '';
+  document.getElementById('form-note').value = '';
+  document.getElementById('btn-procedi').disabled = true;
+
+  showScreen('screen-form');
+}
+
+// ─────────────────────────────────────────────
+// FORM — Calcolo delta e validazione zone
+// ─────────────────────────────────────────────
+function calcDelta(idx) {
+  var sens  = parseFloat(document.getElementById('t-sens-' + idx).value);
+  var rif   = parseFloat(document.getElementById('t-rif-' + idx).value);
+  var delta_el   = document.getElementById('delta-' + idx);
+  var badge_el   = document.getElementById('zona-badge-' + idx);
+  var card_el    = document.getElementById('zona-card-' + idx);
+  var zona       = ZONE[idx];
+
+  if (isNaN(sens) || isNaN(rif)) {
+    delta_el.textContent = '—';
+    delta_el.className = 'zona-delta';
+    badge_el.textContent = '—';
+    badge_el.className = 'badge badge-gray';
+    card_el.className = 'zona-card';
+    state.formData.zone[idx] = {};
+  } else {
+    var delta = Math.abs(sens - rif);
+    delta_el.textContent = delta.toFixed(1) + '°C';
+
+    // Valutazione NC
+    var tempOutOfRange = (rif < zona.minT || rif > zona.maxT);
+    var deltaExceeded  = (delta > zona.maxDelta);
+    var isNC = tempOutOfRange || deltaExceeded;
+
+    if (isNC) {
+      delta_el.className = 'zona-delta delta-nc';
+      badge_el.textContent = 'NC';
+      badge_el.className = 'badge badge-nc';
+      card_el.className = 'zona-card stato-nc';
+    } else {
+      delta_el.className = 'zona-delta delta-ok';
+      badge_el.textContent = 'OK';
+      badge_el.className = 'badge badge-ok';
+      card_el.className = 'zona-card stato-ok';
+    }
+
+    state.formData.zone[idx] = {
+      nome: zona.nome,
+      tempSensore: sens, tempRiferimento: rif,
+      delta: delta, nc: isNC
+    };
+  }
+
+  aggiornaNcSection();
+  aggiornaBtnProcedi();
+}
+
+function aggiornaNcSection() {
+  // Raccogli zone NC
+  var zoneNc = [];
+  state.formData.zone.forEach(function(z) {
+    if (z.nc) zoneNc.push(z.nome);
+  });
+  var manualNc = document.getElementById('nc-manual-check').checked;
+
+  if (zoneNc.length > 0 || manualNc) {
+    document.getElementById('nc-section').classList.add('visible');
+    document.getElementById('nc-zona').value = zoneNc.join(', ') || 'Segnalazione manuale';
+  } else {
+    document.getElementById('nc-section').classList.remove('visible');
+  }
+}
+
+function toggleManualNc() {
+  aggiornaNcSection();
+  aggiornaBtnProcedi();
+}
+
+function aggiornaBtnProcedi() {
+  // Abilita solo se tutte e 3 le zone hanno valori inseriti
+  var tutteCompilate = state.formData.zone.every(function(z) {
+    return z && typeof z.tempSensore === 'number' && typeof z.tempRiferimento === 'number';
+  });
+  document.getElementById('btn-procedi').disabled = !tutteCompilate;
+}
+
+// ─────────────────────────────────────────────
+// FORM → FIRMA
+// ─────────────────────────────────────────────
+function procediAFirma() {
+  // Raccogli dati rimanenti
+  var zoneNc = state.formData.zone.filter(function(z){ return z.nc; });
+  state.formData.nc = (zoneNc.length > 0) || document.getElementById('nc-manual-check').checked;
+  state.formData.ncZone       = document.getElementById('nc-zona').value;
+  state.formData.ncDescrizione = document.getElementById('nc-descrizione').value;
+  state.formData.ncAzione     = document.getElementById('nc-azione').value;
+  state.formData.note         = document.getElementById('form-note').value;
+
+  // Preparazione schermata firma
+  document.getElementById('firma-op-name').textContent = state.operatoreCorrente.nome;
+  state.firmaPinBuffer = '';
+  aggiornaDotsFirma();
+  document.getElementById('firma-pin-error').textContent = '';
+  document.getElementById('btn-firma-confirm').disabled = true;
+
+  // Mostra anteprima firma se disponibile
+  var preview = document.getElementById('firma-preview');
+  if (state.operatoreCorrente.signatureB64) {
+    preview.innerHTML = '<img src="' + state.operatoreCorrente.signatureB64 + '" alt="Firma">';
+  } else {
+    preview.innerHTML = '<span class="firma-preview-placeholder">⚠️ Firma non registrata — contattare admin</span>';
+  }
+
+  showScreen('screen-firma');
+}
+
+// ─────────────────────────────────────────────
+// FIRMA — PIN Pad (5 cifre)
+// ─────────────────────────────────────────────
+function firmaPinTap(digit) {
+  if (state.firmaPinBuffer.length >= 5) return;
+  state.firmaPinBuffer += digit;
+  aggiornaDotsFirma();
+  if (state.firmaPinBuffer.length === 5) {
+    verificaFirmaPin();
+  }
+}
+
+function firmaPinDel() {
+  state.firmaPinBuffer = state.firmaPinBuffer.slice(0, -1);
+  aggiornaDotsFirma();
+  document.getElementById('firma-pin-error').textContent = '';
+  document.getElementById('btn-firma-confirm').disabled = true;
+}
+
+function aggiornaDotsFirma() {
+  for (var i = 0; i < 5; i++) {
+    var dot = document.getElementById('fdot' + i);
+    dot.classList.toggle('filled', i < state.firmaPinBuffer.length);
+  }
+}
+
+async function verificaFirmaPin() {
+  var op = state.operatoreCorrente;
+  var pinOk = false;
+
+  if (op.pinFirmaHash) {
+    var h = await sha256(state.firmaPinBuffer);
+    pinOk = (h === op.pinFirmaHash);
+  } else {
+    // Fallback: accetta qualsiasi 5 cifre se pinFirmaHash non ancora configurato
+    // e mostra avviso admin
+    pinOk = (state.firmaPinBuffer.length === 5);
+    if (pinOk) {
+      showToast('PIN firma non configurato — contattare admin QMS', 'warn');
+    }
+  }
+
+  if (pinOk) {
+    document.getElementById('btn-firma-confirm').disabled = false;
+    document.getElementById('firma-pin-error').textContent = '';
+  } else {
+    document.getElementById('firma-pin-error').textContent = 'PIN firma non corretto — riprova';
+    state.firmaPinBuffer = '';
+    aggiornaDotsFirma();
+    document.getElementById('btn-firma-confirm').disabled = true;
+    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+  }
+}
+
+// ─────────────────────────────────────────────
+// CONFERMA FIRMA — Genera PDF e salva
+// ─────────────────────────────────────────────
+async function confermaFirma() {
+  document.getElementById('btn-firma-confirm').disabled = true;
+  var btn = document.getElementById('btn-firma-confirm');
+  btn.textContent = '⏳ Generazione PDF...';
+
+  try {
+    // 1. Genera PDF
+    state.pdfDoc = generaPdf(state.formData, state.operatoreCorrente);
+
+    // 2. Salva su Firestore
+    var record = Object.assign({}, state.formData, {
+      firmaTimestamp: new Date().toISOString(),
+      firmato: true,
+      versione: 'FA-SQ-T-01-Rev2',
+    });
+
+    if (FIREBASE_ENABLED && firestoreDB) {
+      try {
+        var docRef = await firestoreDB.collection('qms_temperature').add(record);
+        state.firestoreId = docRef.id;
+      } catch(e) {
+        console.error('Firestore save error:', e.code);
+        showToast('Salvataggio Firestore fallito — PDF disponibile', 'warn');
+      }
+    }
+
+    // 3. Mostra schermata successo
+    mostraSuccess(record);
+
+  } catch(e) {
+    console.error('Errore firma:', e);
+    btn.textContent = '✅ Conferma e genera PDF';
+    btn.disabled = false;
+    showToast('Errore nella generazione del PDF', 'error');
+  }
+}
+
+// ─────────────────────────────────────────────
+// GENERAZIONE PDF — jsPDF
+// ─────────────────────────────────────────────
+function generaPdf(fd, op) {
+  var { jsPDF } = window.jspdf;
+  var doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+  var W = 210, L = 297;
+  var marginL = 18, marginR = 18;
+  var colW = W - marginL - marginR;
+  var y = 0;
+
+  // ── Colori
+  var GREEN  = [45, 106, 79];   // #2D6A4F
+  var GREEN2 = [64, 145, 108];  // #40916C
+  var LTGRN  = [216, 237, 223]; // #D8EDDF
+  var WHITE  = [255, 255, 255];
+  var DGREY  = [50, 50, 50];
+  var LGREY  = [240, 240, 240];
+  var RED    = [192, 57, 43];
+  var OKGRN  = [39, 174, 96];
+
+  // ── Header verde
+  doc.setFillColor(GREEN[0], GREEN[1], GREEN[2]);
+  doc.rect(0, 0, W, 30, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.setTextColor(255, 255, 255);
+  doc.text('FARMACIA ASCONA', marginL, 12);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Sistema di Gestione Qualità', marginL, 19);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.text('Verifica Mensile Temperature', marginL, 26);
+
+  // Codice doc in alto a destra
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(200, 255, 220);
+  doc.text('FA-SQ-T-01 | Rev.2', W - marginR, 12, { align: 'right' });
+  doc.text('Piano Spark — nLPD art.5', W - marginR, 19, { align: 'right' });
+
+  y = 38;
+
+  // ── Sezione dati generali
+  doc.setFillColor(LGREY[0], LGREY[1], LGREY[2]);
+  doc.roundedRect(marginL, y, colW, 22, 2, 2, 'F');
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(DGREY[0], DGREY[1], DGREY[2]);
+
+  var col1 = marginL + 4;
+  var col2 = marginL + 55;
+  var col3 = marginL + 110;
+
+  doc.text('Data verifica', col1, y + 7);
+  doc.text('Mese di riferimento', col2, y + 7);
+  doc.text('Operatore', col3, y + 7);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.text(fd.data + '  ' + fd.ora, col1, y + 15);
+  doc.text(fd.mese, col2, y + 15);
+  doc.text(op.nome + ' (' + op.sigla + ')', col3, y + 15);
+
+  y += 28;
+
+  // ── Tabella zone
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setFillColor(GREEN[0], GREEN[1], GREEN[2]);
+  doc.rect(marginL, y, colW, 8, 'F');
+  doc.setTextColor(255, 255, 255);
+  var colZona = marginL + 2;
+  var colSens = marginL + 60;
+  var colRif  = marginL + 95;
+  var colDelta = marginL + 128;
+  var colRange = marginL + 152;
+  var colEsito = marginL + 160;
+  doc.text('Zona', colZona, y + 5.5);
+  doc.text('Sensore °C', colSens, y + 5.5);
+  doc.text('Rif. °C', colRif, y + 5.5);
+  doc.text('Δ °C', colDelta, y + 5.5);
+  doc.text('Range', colRange - 3, y + 5.5);
+  doc.text('Esito', colEsito + 10, y + 5.5);
+  y += 8;
+
+  fd.zone.forEach(function(z, idx) {
+    var rowH = 10;
+    var fill = idx % 2 === 0 ? WHITE : [248, 248, 248];
+    doc.setFillColor(fill[0], fill[1], fill[2]);
+    doc.rect(marginL, y, colW, rowH, 'F');
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(DGREY[0], DGREY[1], DGREY[2]);
+
+    var rangeTxt = ZONE[idx].minT + '–' + ZONE[idx].maxT + '°C';
+
+    if (z && typeof z.tempSensore === 'number') {
+      doc.text(z.nome || ZONE[idx].nome, colZona, y + 6.5);
+      doc.text(z.tempSensore.toFixed(1), colSens + 8, y + 6.5, { align: 'right' });
+      doc.text(z.tempRiferimento.toFixed(1), colRif + 8, y + 6.5, { align: 'right' });
+      doc.text(z.delta.toFixed(1), colDelta + 6, y + 6.5, { align: 'right' });
+      doc.text(rangeTxt, colRange - 3, y + 6.5);
+
+      // Esito box
+      if (z.nc) {
+        doc.setFillColor(RED[0], RED[1], RED[2]);
+        doc.roundedRect(colEsito + 4, y + 1.5, 22, 7, 2, 2, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        doc.text('NC', colEsito + 15, y + 6.5, { align: 'center' });
+      } else {
+        doc.setFillColor(OKGRN[0], OKGRN[1], OKGRN[2]);
+        doc.roundedRect(colEsito + 4, y + 1.5, 22, 7, 2, 2, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        doc.text('OK', colEsito + 15, y + 6.5, { align: 'center' });
+      }
+    } else {
+      doc.setTextColor(150, 150, 150);
+      doc.text(ZONE[idx].nome, colZona, y + 6.5);
+      doc.text('n.d.', colSens + 4, y + 6.5);
+      doc.text('n.d.', colRif + 4, y + 6.5);
+      doc.text('—', colDelta + 4, y + 6.5);
+      doc.text(rangeTxt, colRange - 3, y + 6.5);
+    }
+
+    // Linea separatrice
+    doc.setDrawColor(220, 220, 220);
+    doc.setLineWidth(0.3);
+    doc.line(marginL, y + rowH, marginL + colW, y + rowH);
+
+    y += rowH;
+  });
+
+  y += 6;
+
+  // ── Sezione NC (se presente)
+  if (fd.nc) {
+    doc.setFillColor(RED[0], RED[1], RED[2]);
+    doc.rect(marginL, y, colW, 8, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(255, 255, 255);
+    doc.text('⚠  SEZIONE NON CONFORMITÀ', marginL + 4, y + 5.5);
+    y += 8;
+
+    doc.setFillColor(253, 236, 234);
+    var ncH = 36;
+    doc.rect(marginL, y, colW, ncH, 'F');
+    doc.setDrawColor(RED[0], RED[1], RED[2]);
+    doc.setLineWidth(0.5);
+    doc.rect(marginL, y, colW, ncH);
+    doc.setLineWidth(0.3);
+
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(DGREY[0], DGREY[1], DGREY[2]);
+    doc.text('Zona interessata:', marginL + 4, y + 7);
+    doc.setFont('helvetica', 'normal');
+    doc.text(fd.ncZone || '—', marginL + 42, y + 7);
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('Descrizione anomalia:', marginL + 4, y + 16);
+    doc.setFont('helvetica', 'normal');
+    var descLines = doc.splitTextToSize(fd.ncDescrizione || '—', colW - 10);
+    doc.text(descLines, marginL + 4, y + 23);
+
+    var descH = Math.min(descLines.length * 4, 12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Azione correttiva:', marginL + 4, y + 26 + descH);
+    doc.setFont('helvetica', 'normal');
+    var azioneLines = doc.splitTextToSize(fd.ncAzione || '—', colW - 10);
+    doc.text(azioneLines, marginL + 4, y + 33 + descH);
+
+    y += ncH + 8;
+  }
+
+  // ── Note
+  if (fd.note && fd.note.trim().length > 0) {
+    doc.setFillColor(LGREY[0], LGREY[1], LGREY[2]);
+    var noteLines = doc.splitTextToSize(fd.note, colW - 10);
+    var noteH = 8 + (noteLines.length * 4.5);
+    doc.rect(marginL, y, colW, noteH, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(DGREY[0], DGREY[1], DGREY[2]);
+    doc.text('Note:', marginL + 4, y + 6);
+    doc.setFont('helvetica', 'normal');
+    doc.text(noteLines, marginL + 4, y + 13);
+    y += noteH + 8;
+  }
+
+  // ── Sezione firma
+  y = Math.max(y, 220);
+  doc.setDrawColor(GREEN[0], GREEN[1], GREEN[2]);
+  doc.setLineWidth(0.5);
+  doc.line(marginL, y, marginL + 60, y);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(DGREY[0], DGREY[1], DGREY[2]);
+  doc.text('Firma operatore', marginL, y + 5);
+  doc.setFont('helvetica', 'normal');
+  doc.text(op.nome + ' (' + op.sigla + ')', marginL, y + 10);
+  doc.text('Data: ' + fd.data + '  Ora: ' + fd.ora, marginL, y + 15);
+
+  // Immagine firma se disponibile
+  if (op.signatureB64) {
+    try {
+      doc.addImage(op.signatureB64, 'JPEG', marginL, y - 18, 45, 18);
+    } catch(e) {
+      // firma non caricabile — continua senza
+    }
+  }
+
+  // Codice Firestore (tracciabilità)
+  if (state.firestoreId) {
+    doc.setFontSize(7);
+    doc.setTextColor(180, 180, 180);
+    doc.text('ID: ' + state.firestoreId, W - marginR, y + 15, { align: 'right' });
+  }
+
+  // ── Footer
+  doc.setFillColor(GREEN[0], GREEN[1], GREEN[2]);
+  doc.rect(0, L - 14, W, 14, 'F');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(180, 255, 210);
+  doc.text('Farmacia Ascona · Sistema di Gestione Qualità · FA-SQ-T-01 Rev.2', marginL, L - 7);
+  doc.setTextColor(255, 255, 255);
+  doc.text('Conservare per 6 anni (art.28 LATer)', W - marginR, L - 7, { align: 'right' });
+
+  return doc;
+}
+
+// ─────────────────────────────────────────────
+// SUCCESS — Mostra schermata finale
+// ─────────────────────────────────────────────
+function mostraSuccess(record) {
+  var esiti = record.zone.map(function(z) {
+    return z && z.nc ? '⚠️' : '✅';
+  }).join(' ');
+
+  document.getElementById('success-sub').textContent =
+    state.firestoreId
+      ? 'Archiviato su Firestore · ID: ' + state.firestoreId.substring(0, 8) + '...'
+      : 'Archiviazione locale — Firebase non disponibile';
+
+  var tbody = document.getElementById('summary-table');
+  tbody.innerHTML =
+    '<tr><td>Mese</td><td>' + record.mese + '</td></tr>' +
+    '<tr><td>Data</td><td>' + record.data + '  ' + record.ora + '</td></tr>' +
+    '<tr><td>Operatore</td><td>' + record.operatoreNome + ' (' + record.operatore + ')</td></tr>' +
+    '<tr><td>Zone</td><td>' + esiti + ' ' +
+      record.zone.map(function(z,i){ return z.nc ? (ZONE[i].nome + ': NC') : ZONE[i].nome + ': OK'; }).join(' | ') +
+    '</td></tr>' +
+    '<tr><td>Non conformità</td><td>' + (record.nc ? '⚠️ Sì' : '✅ No') + '</td></tr>';
+
+  showScreen('screen-success');
+}
+
+// ─────────────────────────────────────────────
+// DOWNLOAD PDF
+// ─────────────────────────────────────────────
+function downloadPdf() {
+  if (!state.pdfDoc) return;
+  var fd = state.formData;
+  var filename = 'FA-SQ-T-01_' + fd.isoMese + '_' + fd.operatore + '.pdf';
+  state.pdfDoc.save(filename);
+  showToast('PDF scaricato: ' + filename, 'ok');
+}
+
+// ─────────────────────────────────────────────
+// NAVIGAZIONE
+// ─────────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+function goBack(id) {
+  showScreen(id);
+}
+
+function nuovaVerifica() {
+  state.operatoreCorrente = null;
+  state.pinBuffer = '';
+  state.firmaPinBuffer = '';
+  state.formData = {};
+  state.pdfDoc = null;
+  state.firestoreId = null;
+  document.querySelectorAll('.op-btn').forEach(function(b){ b.classList.remove('selected'); });
+  document.getElementById('pin-section').style.display = 'none';
+  document.getElementById('pin-error').textContent = '';
+  aggiornaDotsLogin();
+  showScreen('screen-login');
+}
+
+// ─────────────────────────────────────────────
+// TOAST NOTIFICATION
+// ─────────────────────────────────────────────
+var toastTimer = null;
+function showToast(msg, type) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (type ? ' toast-' + type : '');
+  t.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ t.classList.remove('show'); }, 3200);
+}
+
+// ─────────────────────────────────────────────
+// AVVIO
+// ─────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', init);
+</script>
+
+<!-- ════════════════════════════════════════════════════════
+  NOTE TECNICHE (non visibili)
+
+  CAMPI FIRESTORE necessari per gli operatori (collection: operatori):
+    - sigla:         string  (document ID, es. "DBC")
+    - nome:          string  (es. "D. Biasca-Caroni")
+    - ruolo:         string  (es. "Farmacista Titolare")
+    - pinHash:       string  (SHA-256 del PIN 4 cifre — accesso)
+    - pinFirmaHash:  string  (SHA-256 del PIN 5 cifre — firma) ← NUOVO
+    - signatureB64:  string  (data URI base64 JPEG firma)      ← NUOVO
+    - attivo:        boolean
+
+  Per aggiungere i nuovi campi agli operatori esistenti,
+  usare il pannello QMS Admin (in sviluppo) oppure
+  Firebase Console → Firestore → operatori → documento → modifica.
+
+  Record salvati in: collection "qms_temperature"
+  Zone monitorate:
+    1. Frigo Magazzino       — 2-8°C,  Δ max 0.5°C
+    2. Magazzino (Back)      — 15-25°C, Δ max 1.0°C
+    3. Reparto Vendita (Front) — 15-25°C, Δ max 1.0°C
+
+  Conservazione minima: 6 anni (art.28 LATer)
+  Progetto Firebase: dosettes-farmacia (eur3 — nLPD-conforme)
+════════════════════════════════════════════════════════ -->
+</body>
+</html>
