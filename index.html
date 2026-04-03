@@ -13,6 +13,7 @@
 <!-- Firebase SDK (Compat v10) — stesso progetto dosettes-farmacia -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 
 <!-- jsPDF per generazione PDF client-side -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -783,6 +784,9 @@ var firestoreDB = null;
 try {
   firebase.initializeApp(firebaseConfig);
   firestoreDB = firebase.firestore();
+  firebase.auth().signInWithEmailAndPassword('farmacia.ascona@gmail.com','7917139Dbc').catch(function(e){
+    console.warn('Firebase auth fallita:', e.code);
+  });
 } catch(e) {
   console.error('Errore init Firebase:', e.message);
   FIREBASE_ENABLED = false;
