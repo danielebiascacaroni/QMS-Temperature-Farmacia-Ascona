@@ -821,8 +821,9 @@ var firestoreDB = null;
 try {
   firebase.initializeApp(firebaseConfig);
   firestoreDB = firebase.firestore();
-  firebase.auth().signInWithEmailAndPassword('farmacia.ascona@gmail.com','7917139Dbc').catch(function(e){
-    console.warn('Firebase auth fallita:', e.code);
+  // Autenticazione anonima Firebase (bootstrap) — l'operatore si autentica con il suo account dopo il PIN
+  firebase.auth().signInAnonymously().catch(function(e){
+    console.warn('Firebase auth anonima fallita:', e.code);
   });
   // DEVICE AUTH — Registro dispositivi autorizzati
   (function(){
@@ -997,16 +998,31 @@ function aggiornaDotsLogin() {
 async function verificaPin() {
   var op = state.operatoreCorrente;
   var pinOk = false;
+  var pinHash = null;
 
   if (op.pinHash) {
-    var h = await sha256(state.pinBuffer);
-    pinOk = (h === op.pinHash);
+    pinHash = await sha256(state.pinBuffer);
+    pinOk = (pinHash === op.pinHash);
   } else {
     // Fallback: confronto diretto (solo in offline/demo)
     pinOk = (state.pinBuffer === (op.pin || ''));
   }
 
   if (pinOk) {
+    // Re-autenticazione Firebase con account personale dell'operatore
+    if (op.emailFirebase && pinHash) {
+      try {
+        await firebase.auth().signOut();
+        await firebase.auth().signInWithEmailAndPassword(op.emailFirebase, pinHash);
+      } catch(e) {
+        console.warn('Re-auth operatore fallita:', e.code);
+        await firebase.auth().signInAnonymously().catch(function(){});
+        document.getElementById('pin-error').textContent = 'Errore auth Firebase — contatta admin';
+        state.pinBuffer = '';
+        aggiornaDotsLogin();
+        return;
+      }
+    }
     // Accesso OK — vai alla form
     avviaForm();
   } else {
