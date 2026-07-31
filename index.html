@@ -302,6 +302,28 @@ body {
   color: var(--text3);
   font-size: 14px;
 }
+.anomalia-list { display: grid; gap: 10px; }
+.anomalia-item {
+  border: 1.5px solid var(--danger);
+  background: var(--danger-light);
+  border-radius: 12px;
+  padding: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.anomalia-item:active { transform: scale(0.99); }
+.anomalia-item.documentato {
+  border-color: var(--ok);
+  background: var(--ok-light);
+}
+.anomalia-item-top {
+  display: flex; align-items: flex-start;
+  justify-content: space-between; gap: 10px;
+}
+.anomalia-item-title { font-size: 14px; font-weight: 700; color: var(--text); }
+.anomalia-item-sub { font-size: 12px; color: var(--text2); margin-top: 3px; }
+.anomalia-item-detail { font-size: 12px; color: var(--text2); margin-top: 8px; line-height: 1.4; }
+.anomalia-form-error { color: var(--danger); font-size: 13px; font-weight: 600; margin: 6px 0 0; min-height: 18px; }
 .sensor-modal {
   position: fixed; inset: 0; z-index: 10020;
   background: rgba(16, 18, 16, 0.72);
@@ -1028,6 +1050,13 @@ body {
         </div>
       </div>
 
+      <!-- Picchi fuori norma rilevati dal sensore (richiedono dettaglio manuale) -->
+      <div class="card" id="sensor-anomalie-card" style="display:none">
+        <div class="card-title">⚠️ Picchi fuori norma rilevati</div>
+        <p style="font-size:13px;color:var(--text2);margin-bottom:10px">Il dato importato è giornaliero: la durata reale del fuori range non è nota automaticamente. Verifica nell'app del sensore l'orario esatto e completa ogni episodio prima di salvare.</p>
+        <div class="anomalia-list" id="sensor-anomalie-list"></div>
+      </div>
+
       <!-- ZONA 1: Frigo Magazzino -->
       <div class="zona-card" id="zona-card-0">
         <div class="zona-header">
@@ -1486,6 +1515,7 @@ var state = {
   formData: {},
   sensorImportRows: [],
   sensorStats: null,
+  sensorAnomalie: [],
   pdfDoc: null,
   firestoreId: null,
   recordCorrente: null,
@@ -1702,6 +1732,128 @@ function buildSensorChartHtml(rows) {
   '</svg></div>';
 }
 
+// ─────────────────────────────────────────────
+// SENSORE — Episodi fuori range (richiedono dettaglio manuale)
+// ─────────────────────────────────────────────
+function rilevaEpisodiFuoriRange(rows) {
+  var minT = ZONE[0].minT, maxT = ZONE[0].maxT;
+  var episodi = [];
+  var corrente = null;
+  rows.forEach(function(row) {
+    var fuori = row.temperature < minT || row.temperature > maxT;
+    if (fuori) {
+      if (!corrente) {
+        corrente = {
+          startIso: row.isoDate, endIso: row.isoDate,
+          startDate: row.labelDate, endDate: row.labelDate,
+          giorni: 1, tempMin: row.temperature, tempMax: row.temperature
+        };
+      } else {
+        corrente.endIso = row.isoDate;
+        corrente.endDate = row.labelDate;
+        corrente.giorni++;
+        corrente.tempMin = Math.min(corrente.tempMin, row.temperature);
+        corrente.tempMax = Math.max(corrente.tempMax, row.temperature);
+      }
+    } else if (corrente) {
+      episodi.push(corrente);
+      corrente = null;
+    }
+  });
+  if (corrente) episodi.push(corrente);
+  return episodi;
+}
+
+function sincronizzaAnomalieSensore(rows) {
+  var rilevati = rilevaEpisodiFuoriRange(rows);
+  var precedenti = state.sensorAnomalie || [];
+  state.sensorAnomalie = rilevati.map(function(ep) {
+    var match = precedenti.find(function(p) { return p.startIso === ep.startIso && p.endIso === ep.endIso; });
+    return match || Object.assign({ durata: '', motivo: '', azione: '', documentato: false }, ep);
+  });
+}
+
+function renderAnomalieList() {
+  var card = document.getElementById('sensor-anomalie-card');
+  var list = document.getElementById('sensor-anomalie-list');
+  var anomalie = state.sensorAnomalie || [];
+  if (!anomalie.length) {
+    card.style.display = 'none';
+    list.innerHTML = '';
+    return;
+  }
+  card.style.display = 'block';
+  list.innerHTML = anomalie.map(function(ep, index) {
+    var periodo = ep.startDate === ep.endDate ? ep.startDate : (ep.startDate + ' – ' + ep.endDate);
+    var temp = ep.tempMin === ep.tempMax ? ep.tempMax.toFixed(1) + '°C' : (ep.tempMin.toFixed(1) + ' – ' + ep.tempMax.toFixed(1) + '°C');
+    var stato = ep.documentato
+      ? '<span class="badge badge-ok">Documentato</span>'
+      : '<span class="badge badge-nc">Da documentare</span>';
+    var dettaglio = ep.documentato
+      ? '<div class="anomalia-item-detail"><strong>Durata:</strong> ' + escapeHtml(ep.durata) + '<br><strong>Motivo:</strong> ' + escapeHtml(ep.motivo) + '<br><strong>Azione:</strong> ' + escapeHtml(ep.azione) + '</div>'
+      : '<div class="anomalia-item-detail">Tocca per inserire durata, motivo e azione intrapresa.</div>';
+    return '<div class="anomalia-item' + (ep.documentato ? ' documentato' : '') + '" onclick="apriDettaglioAnomalia(' + index + ')">' +
+      '<div class="anomalia-item-top">' +
+        '<div>' +
+          '<div class="anomalia-item-title">' + escapeHtml(periodo) + ' · ' + ep.giorni + (ep.giorni === 1 ? ' giorno' : ' giorni') + '</div>' +
+          '<div class="anomalia-item-sub">Temperatura rilevata: ' + temp + '</div>' +
+        '</div>' +
+        stato +
+      '</div>' +
+      dettaglio +
+    '</div>';
+  }).join('');
+}
+
+function buildAnomaliaFormHtml(ep, index) {
+  var periodo = ep.startDate === ep.endDate ? ep.startDate : (ep.startDate + ' – ' + ep.endDate);
+  var temp = ep.tempMin === ep.tempMax ? ep.tempMax.toFixed(1) + '°C' : (ep.tempMin.toFixed(1) + ' – ' + ep.tempMax.toFixed(1) + '°C');
+  return '<div class="anomalia-form">' +
+    '<p style="font-size:13px;color:var(--text2);margin-bottom:14px">Periodo rilevato dal sensore: <strong>' + escapeHtml(periodo) + '</strong> (' + ep.giorni + (ep.giorni === 1 ? ' giorno' : ' giorni') + ') · temperatura ' + temp + '. Il dato è giornaliero: verifica nell\'app del sensore l\'orario esatto e indicalo qui sotto.</p>' +
+    '<div class="form-group">' +
+      '<label class="form-label">Durata effettiva del fuori range</label>' +
+      '<input type="text" class="form-input" id="anomalia-durata-' + index + '" placeholder="Es: dalle 14:00 alle 18:30" value="' + escapeHtml(ep.durata || '') + '">' +
+    '</div>' +
+    '<div class="form-group">' +
+      '<label class="form-label">Motivo presunto</label>' +
+      '<textarea class="form-textarea" id="anomalia-motivo-' + index + '" placeholder="Es: sbrinamento, apertura prolungata, guasto...">' + escapeHtml(ep.motivo || '') + '</textarea>' +
+    '</div>' +
+    '<div class="form-group">' +
+      '<label class="form-label">Cosa è stato deciso / fatto</label>' +
+      '<textarea class="form-textarea" id="anomalia-azione-' + index + '" placeholder="Es: verificato prodotti, nessuna azione necessaria, contattato tecnico...">' + escapeHtml(ep.azione || '') + '</textarea>' +
+    '</div>' +
+    '<div class="anomalia-form-error" id="anomalia-form-error-' + index + '"></div>' +
+    '<button class="btn btn-primary" type="button" onclick="salvaDettaglioAnomalia(' + index + ')">Salva dettaglio</button>' +
+  '</div>';
+}
+
+function apriDettaglioAnomalia(index) {
+  var ep = state.sensorAnomalie[index];
+  if (!ep) return;
+  document.getElementById('sensor-modal-title').textContent = 'Dettaglio picco fuori range';
+  document.getElementById('sensor-modal-body').innerHTML = buildAnomaliaFormHtml(ep, index);
+  document.getElementById('sensor-modal').classList.add('active');
+}
+
+function salvaDettaglioAnomalia(index) {
+  var ep = state.sensorAnomalie[index];
+  if (!ep) return;
+  var durata = document.getElementById('anomalia-durata-' + index).value.trim();
+  var motivo = document.getElementById('anomalia-motivo-' + index).value.trim();
+  var azione = document.getElementById('anomalia-azione-' + index).value.trim();
+  if (!durata || !motivo || !azione) {
+    document.getElementById('anomalia-form-error-' + index).textContent = 'Compila tutti e tre i campi per documentare il picco.';
+    return;
+  }
+  ep.durata = durata;
+  ep.motivo = motivo;
+  ep.azione = azione;
+  ep.documentato = true;
+  document.getElementById('sensor-modal').classList.remove('active');
+  renderAnomalieList();
+  aggiornaBtnProcedi();
+}
+
 function updateSensorStatus(message, type) {
   var el = document.getElementById('sensor-import-status');
   el.className = 'sensor-status ' + (type || 'info');
@@ -1812,6 +1964,18 @@ function buildRecordDetailHtml(record) {
         '<div style="margin-top:12px">' + buildSensorChartHtml(sensorRows) + '</div>' +
       '</div>'
     : '<div class="detail-block"><div class="detail-title">Storico sensore interno frigo</div><div class="history-empty">Nessun dato sensore associato a questa registrazione.</div></div>';
+  var anomalie = record.sensorAnomalie || [];
+  var anomalieBlock = anomalie.length
+    ? '<div class="detail-block"><div class="detail-title">Picchi fuori norma documentati</div>' +
+        anomalie.map(function(ep) {
+          var periodo = ep.startDate === ep.endDate ? ep.startDate : (ep.startDate + ' – ' + ep.endDate);
+          return '<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border)">' +
+            '<div style="font-weight:700;font-size:13px">' + escapeHtml(periodo) + ' (' + ep.giorni + (ep.giorni === 1 ? ' giorno' : ' giorni') + ')</div>' +
+            '<div style="font-size:12px;color:var(--text2);margin-top:4px"><strong>Durata:</strong> ' + escapeHtml(ep.durata || '—') + '<br><strong>Motivo:</strong> ' + escapeHtml(ep.motivo || '—') + '<br><strong>Azione:</strong> ' + escapeHtml(ep.azione || '—') + '</div>' +
+          '</div>';
+        }).join('') +
+      '</div>'
+    : '';
   return '<div class="detail-grid">' +
     '<div class="detail-block">' +
       '<div class="detail-title">Riepilogo verifica</div>' +
@@ -1829,6 +1993,7 @@ function buildRecordDetailHtml(record) {
       '<table class="summary-table">' + zoneRows + '</table>' +
     '</div>' +
     sensorBlock +
+    anomalieBlock +
   '</div>';
 }
 
@@ -1859,6 +2024,7 @@ function normalizeHistoricalRecord(raw, id) {
   record._id = id || record._id || '';
   record.sensorRows = Array.isArray(record.sensorRows) ? record.sensorRows : parseStoricoSensoreRaw(record.frigoSensoreRaw || '');
   record.sensorStats = record.sensorStats || computeSensorStats(record.sensorRows);
+  record.sensorAnomalie = Array.isArray(record.sensorAnomalie) ? record.sensorAnomalie : [];
   return record;
 }
 
@@ -1868,24 +2034,31 @@ function analizzaStoricoSensore() {
   if (!rows.length) {
     state.sensorImportRows = [];
     state.sensorStats = null;
+    state.sensorAnomalie = [];
     document.getElementById('sensor-import-output').style.display = 'none';
     document.getElementById('sensor-import-badge').textContent = 'Nessun dato';
     updateSensorStatus('Formato non riconosciuto. Incolla il blocco completo con DateTime, Temperature e Humidity.', 'error');
+    renderAnomalieList();
+    aggiornaBtnProcedi();
     return;
   }
   state.sensorImportRows = rows;
   state.sensorStats = computeSensorStats(rows);
+  sincronizzaAnomalieSensore(rows);
   document.getElementById('sensor-summary').innerHTML = buildSensorSummaryHtml(rows);
   document.getElementById('sensor-chart-preview').innerHTML = buildSensorChartHtml(rows);
   document.getElementById('sensor-table-preview').innerHTML = buildSensorTableHtml(rows);
   document.getElementById('sensor-import-output').style.display = 'block';
   document.getElementById('sensor-import-badge').textContent = rows.length + ' giorni';
   updateSensorStatus('Import completato. Diagramma e tabella sono pronti e puoi aprirli a pieno schermo con un clic.', 'ok');
+  renderAnomalieList();
+  aggiornaBtnProcedi();
 }
 
 function pulisciStoricoSensore() {
   state.sensorImportRows = [];
   state.sensorStats = null;
+  state.sensorAnomalie = [];
   document.getElementById('frigo-sensore-raw').value = '';
   document.getElementById('sensor-summary').innerHTML = '';
   document.getElementById('sensor-chart-preview').innerHTML = '';
@@ -1893,6 +2066,8 @@ function pulisciStoricoSensore() {
   document.getElementById('sensor-import-output').style.display = 'none';
   document.getElementById('sensor-import-badge').textContent = 'Nessun dato';
   updateSensorStatus('Incolla il blocco dati dell\'app del sensore e premi "Analizza dati".', 'info');
+  renderAnomalieList();
+  aggiornaBtnProcedi();
 }
 
 function openSensorPreview(kind) {
@@ -2147,6 +2322,8 @@ function avviaForm() {
   updateSensorStatus('Incolla il blocco dati dell\'app del sensore e premi "Analizza dati".', 'info');
   state.sensorImportRows = [];
   state.sensorStats = null;
+  state.sensorAnomalie = [];
+  renderAnomalieList();
   document.getElementById('btn-procedi').disabled = true;
 
   showScreen('screen-form');
@@ -2224,11 +2401,12 @@ function toggleManualNc() {
 }
 
 function aggiornaBtnProcedi() {
-  // Abilita solo se tutte e 3 le zone hanno valori inseriti
+  // Abilita solo se tutte e 3 le zone hanno valori inseriti e ogni picco fuori range è documentato
   var tutteCompilate = state.formData.zone.every(function(z) {
     return z && typeof z.tempSensore === 'number' && typeof z.tempRiferimento === 'number';
   });
-  document.getElementById('btn-procedi').disabled = !tutteCompilate;
+  var anomalieComplete = (state.sensorAnomalie || []).every(function(a){ return a.documentato; });
+  document.getElementById('btn-procedi').disabled = !(tutteCompilate && anomalieComplete);
 }
 
 // ─────────────────────────────────────────────
@@ -2806,6 +2984,7 @@ async function salvaEConferma() {
     versione: 'FA-SQ-T-01-Rev2',
     sensorRows: state.sensorImportRows.slice(),
     sensorStats: state.sensorStats,
+    sensorAnomalie: state.sensorAnomalie.slice(),
   });
 
   if (FIREBASE_ENABLED && firestoreDB) {
