@@ -672,6 +672,44 @@ body {
 .firma-preview-placeholder { color: var(--text3); font-size: 14px; }
 
 /* ════════════════════════════════════════════════════
+   SCREEN: BILANCE
+════════════════════════════════════════════════════ */
+.bil-note {
+  font-size: 12px; color: var(--text2); line-height: 1.5;
+  background: var(--surface2); border-left: 4px solid var(--accent);
+  padding: 10px 12px; border-radius: var(--radius-sm); margin-bottom: 14px;
+}
+.bil-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.bil-table-wrap { overflow-x: auto; margin: 6px 0 4px; }
+.bil-table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 640px; }
+.bil-table th, .bil-table td { border: 1px solid var(--border); padding: 5px 6px; text-align: center; vertical-align: middle; }
+.bil-table th { background: var(--surface2); font-weight: 700; color: var(--text2); font-size: 11px; text-transform: uppercase; }
+.bil-table td.left { text-align: left; font-weight: 600; }
+.bil-table input { width: 100%; min-width: 52px; border: 1px solid var(--border); border-radius: 6px; padding: 4px; font-size: 12px; text-align: right; font-family: var(--font); }
+.bil-table input[type="text"] { text-align: left; }
+.bil-calc { font-variant-numeric: tabular-nums; font-weight: 700; }
+.bil-esito-ok { color: var(--ok); font-weight: 800; }
+.bil-esito-ko { color: var(--danger); font-weight: 800; }
+.bil-esito-pending { color: var(--text3); font-weight: 700; }
+.bil-summary {
+  margin-top: 14px; padding: 14px; border: 2px solid var(--border); border-radius: var(--radius);
+  text-align: center; font-weight: 800; font-size: 14px;
+}
+.bil-summary.good { border-color: var(--ok); background: var(--ok-light); color: var(--ok); }
+.bil-summary.bad { border-color: var(--danger); background: var(--danger-light); color: var(--danger); }
+#btn-bilance-mode.active { background: var(--accent-light); color: var(--accent-dark); border: 1.5px solid var(--accent); }
+
+@media print {
+  body * { visibility: hidden; }
+  #screen-bilance.active, #screen-bilance.active * { visibility: visible; }
+  #screen-bilance { position: absolute; left: 0; top: 0; width: 100%; }
+  #screen-bilance .no-print { display: none !important; }
+  #screen-bilance input, #screen-bilance select, #screen-bilance textarea {
+    border: 0; border-bottom: 1px solid #999; border-radius: 0; background: transparent; color: #000;
+  }
+}
+
+/* ════════════════════════════════════════════════════
    SCREEN: SUCCESS
 ════════════════════════════════════════════════════ */
 .success-icon {
@@ -900,6 +938,8 @@ body {
             <div class="pin-error" id="pin-error"></div>
           </div>
         </div>
+
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-bilance-mode" style="width:100%;margin-top:10px" onclick="attivaModalitaBilance()">⚖️ Controllo annuale bilance</button>
 
         <p style="font-size:12px;color:var(--text3);text-align:center;margin-top:8px">
           Versione: <span style="font-family:var(--mono)">FA-SQ-T-01 · Rev.2</span>
@@ -1187,6 +1227,138 @@ body {
 
 
   <!-- ════════════════════════════════════
+       SCREEN — CONTROLLO ANNUALE BILANCE
+  ════════════════════════════════════ -->
+  <div id="screen-bilance" class="screen">
+    <div class="logo-header no-print" style="position:relative">
+      <button class="header-back" onclick="goBack('screen-login')" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);">‹</button>
+      <img class="logo-header-img" src="logo.png" alt="Farmacia Ascona">
+      <div class="logo-header-divider"></div>
+      <div class="logo-header-text">
+        <div class="logo-header-name">Controllo annuale bilance</div>
+        <div class="logo-header-sub">Farmacia Ascona · FA-SQ-B-01</div>
+        <div class="header-op-line">👤 <span id="bilance-op-name">—</span></div>
+      </div>
+      <div class="logo-header-divider"></div>
+      <div class="logo-date-block">
+        <div class="logo-date" id="bilance-hdr-date">—</div>
+        <div class="logo-time" id="bilance-hdr-time">—</div>
+      </div>
+      <button class="header-logout" onclick="doLogout()" title="Esci dall'app">⏻</button>
+    </div>
+    <div class="content">
+
+      <div class="bil-note">
+        Verifica interna QMS con pesi prestati non accompagnati da certificato di taratura. Il controllo non ha valore di taratura accreditata o verifica metrologica ufficiale: serve a confermare l'idoneità pratica delle bilance per l'uso ordinario in farmacia. In caso di non conformità, dubbio o uso critico, sospendere l'uso della bilancia interessata e richiedere verifica esterna o manutenzione.
+      </div>
+
+      <div class="card">
+        <div class="card-title">Dati e condizioni</div>
+        <div class="bil-grid-2">
+          <div class="form-group">
+            <label class="form-label">Responsabile QMS</label>
+            <input class="form-input" id="bil-qms" type="text">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Locale / postazione</label>
+            <input class="form-input" id="bil-location" type="text">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Origine / prestatore pesi</label>
+            <input class="form-input" id="bil-weightsOwner" type="text" placeholder="Collega / farmacia">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Identificazione set pesi</label>
+            <input class="form-input" id="bil-weightsId" type="text" placeholder="Descrizione o sigla">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Certificazione</label>
+            <input class="form-input" id="bil-weightsCert" type="text" value="Non certificati">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Stato visivo pesi</label>
+            <select class="form-input" id="bil-weightsState">
+              <option>Integro e pulito</option>
+              <option>Da verificare</option>
+              <option>Non idoneo</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group" style="margin-top:4px">
+          <label style="display:flex;align-items:center;gap:10px;font-size:14px;font-weight:500;cursor:pointer;margin-bottom:8px">
+            <input type="checkbox" id="bil-cond1" style="width:20px;height:20px;accent-color:var(--accent);cursor:pointer">
+            Bilance accese, stabilizzate, livellate e pulite
+          </label>
+          <label style="display:flex;align-items:center;gap:10px;font-size:14px;font-weight:500;cursor:pointer">
+            <input type="checkbox" id="bil-cond2" style="width:20px;height:20px;accent-color:var(--accent);cursor:pointer">
+            Piano stabile, senza correnti d'aria, vibrazioni o fonti di calore
+          </label>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Pesate e risultati</div>
+        <p style="font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.5">
+          Eseguire 3 pesate per ciascun carico, attendendo l'indicazione stabile e azzerando la bilancia tra le pesate. Bilance: Setra EL-410S e Mettler P1200. Pesi: 1 g, 10 g, 100 g, 200 g, 500 g (500 g non applicabile su Setra, portata max 410 g).
+        </p>
+        <div class="bil-table-wrap">
+          <table class="bil-table">
+            <thead>
+              <tr>
+                <th class="left">Bilancia</th><th>Carico</th><th>Pesata 1</th><th>Pesata 2</th><th>Pesata 3</th>
+                <th>Media</th><th>Errore</th><th>Toll.</th><th>Esito</th><th>Note</th>
+              </tr>
+            </thead>
+            <tbody id="bil-rows"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Ritorno a zero</div>
+        <div class="bil-grid-2">
+          <div class="form-group">
+            <label class="form-label">Zero residuo Setra dopo prove (g)</label>
+            <input class="form-input" id="bil-setraZero" type="number" step="0.001" placeholder="0.000">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Limite Setra (g)</label>
+            <input class="form-input" id="bil-setraZeroTol" type="number" step="0.001" value="0.005">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Zero residuo Mettler dopo prove (g)</label>
+            <input class="form-input" id="bil-mettlerZero" type="number" step="0.01" placeholder="0.00">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Limite Mettler (g)</label>
+            <input class="form-input" id="bil-mettlerZeroTol" type="number" step="0.01" value="0.02">
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Note aggiuntive (opzionale)</div>
+        <textarea class="form-textarea" id="bil-notes" placeholder="Osservazioni, anomalie, pulizia effettuata, ripetizione prova, manutenzione o limitazioni d'uso."></textarea>
+      </div>
+
+      <div id="bil-summary" class="bil-summary">VERIFICA NON COMPLETATA</div>
+
+      <button class="btn btn-primary no-print" id="btn-bilance-save" style="margin-top:14px" onclick="salvaBilance()">
+        💾 Salva controllo bilance
+      </button>
+      <button class="btn btn-ghost no-print" id="btn-bilance-print" style="margin-top:12px;display:none" onclick="window.print()">
+        🖨️ Stampa / Salva PDF
+      </button>
+      <button class="btn btn-outline no-print" id="btn-bilance-nuovo" style="margin-top:12px;display:none" onclick="nuovaVerifica()">
+        ↩ Torna al login
+      </button>
+      <div style="height:40px"></div>
+
+    </div>
+  </div><!-- /screen-bilance -->
+
+
+  <!-- ════════════════════════════════════
        SCREEN 3 — FIRMA
   ════════════════════════════════════ -->
   <div id="screen-firma" class="screen">
@@ -1460,7 +1632,7 @@ if (FIREBASE_ENABLED) {
         var db=firebase.firestore();
         try{var doc=await db.collection('dispositivi').doc(window._daDeviceId).get();if(doc.exists&&doc.data().autorizzato===true){db.collection('dispositivi').doc(window._daDeviceId).update({ultimoAccesso:new Date()});document.getElementById('device-auth-overlay').style.display='none';return;}}catch(e){console.warn('Device check:',e);}
       });
-      window.daVerificaCodice=async function(){var code=(document.getElementById('da-code').value||'').trim();if(!code)return;var hash=await sha256(code);if(hash!=='81a7ad73c35f4ef750d4471a0be8482de72b0d8327b4337573d712970131b8c4'){document.getElementById('da-error').textContent='Codice non valido.';return;}document.getElementById('da-step1').style.display='none';document.getElementById('da-step2').style.display='block';};
+      window.daVerificaCodice=async function(){var code=(document.getElementById('da-code').value||'').trim();if(!code)return;var hash=await sha256(code);if(hash!=='2ec089eed721957f6f5799d01847ee633e324f08a1549f7ac924b57a7ffd0e7f'){document.getElementById('da-error').textContent='Codice non valido.';return;}document.getElementById('da-step1').style.display='none';document.getElementById('da-step2').style.display='block';};
       window.daRegistraDispositivo=async function(){var nome=(document.getElementById('da-nome').value||'').trim();if(!nome){document.getElementById('da-error2').textContent='Inserisci un nome.';return;}try{var db=firebase.firestore();await db.collection('dispositivi').doc(window._daDeviceId).set({nome:nome,autorizzato:false,richiesta:true,primoAccesso:new Date(),ultimoAccesso:new Date(),userAgent:navigator.userAgent},{merge:true});document.getElementById('da-error2').style.color='#2e7d32';document.getElementById('da-error2').textContent='Richiesta inviata. Autorizza il dispositivo dalla console admin su un dispositivo già abilitato.';}catch(e){document.getElementById('da-error2').textContent='Errore di salvataggio. Riprova.';}};
       document.addEventListener('keydown',function(e){if(e.key!=='Enter')return;if(document.getElementById('da-step2').style.display==='block')daRegistraDispositivo();else daVerificaCodice();});
     })();
@@ -1505,6 +1677,13 @@ var ZONE = [
   { nome: 'Reparto Vendita (Front)', minT: 15.0, maxT: 25.0, maxDelta: 1.0 },
 ];
 
+// Pesi e tolleranze — Controllo annuale bilance
+var BIL_WEIGHTS = [1, 10, 100, 200, 500];
+var BIL_BALANCES = [
+  { id: 'setra',   name: 'Setra EL-410S', step: '0.001', tols: { 1: 0.020, 10: 0.020, 100: 0.050, 200: 0.100, 500: null } },
+  { id: 'mettler', name: 'Mettler P1200', step: '0.01',  tols: { 1: 0.05,  10: 0.05,  100: 0.10,  200: 0.20,  500: 0.50 } }
+];
+
 // ─────────────────────────────────────────────
 // STATO APPLICAZIONE
 // ─────────────────────────────────────────────
@@ -1521,6 +1700,9 @@ var state = {
   recordCorrente: null,
   storicoRecords: [],
   historyBackTarget: 'screen-login',
+  flowType: 'temperature',
+  pendingBilance: false,
+  bilanceData: {},
 };
 
 // ─────────────────────────────────────────────
@@ -1878,7 +2060,27 @@ function renderSuccessSensor(record) {
   chart.innerHTML = buildSensorChartHtml(rows);
 }
 
+function buildStoricoItemHtmlBilance(record, index) {
+  var ts = formatTimestampLabel(getTimestampValue(record));
+  var esitoBadge = record.esito === 'conforme'
+    ? '<span class="badge badge-ok">CONFORME</span>'
+    : record.esito === 'non_conforme'
+      ? '<span class="badge badge-nc">NON CONFORME</span>'
+      : '<span class="badge badge-gray">INCOMPLETO</span>';
+  return '<div class="history-item" onclick="openStoricoDettaglio(' + index + ')">' +
+    '<div class="history-item-top">' +
+      '<div>' +
+        '<div class="history-item-title">⚖️ Controllo annuale bilance</div>' +
+        '<div class="history-item-meta">' + escapeHtml(ts) + ' · ' + escapeHtml(record.operatoreNome || record.operatore || 'Operatore non indicato') + '</div>' +
+      '</div>' +
+      esitoBadge +
+    '</div>' +
+    '<div class="history-item-zones">Setra EL-410S · Mettler P1200</div>' +
+  '</div>';
+}
+
 function buildStoricoItemHtml(record, index) {
+  if (record._tipo === 'bilance') return buildStoricoItemHtmlBilance(record, index);
   var ts = formatTimestampLabel(getTimestampValue(record));
   var esito = record.nc ? '<span class="badge badge-nc">NC</span>' : '<span class="badge badge-ok">OK</span>';
   var zoneText = (record.zone || []).map(function(z, i) {
@@ -1952,7 +2154,42 @@ function chiudiStoricoRegistrazioni() {
   showScreen(state.historyBackTarget || 'screen-login');
 }
 
+function buildRecordDetailHtmlBilance(record) {
+  var rowsHtml = (record.rows || []).map(function(r) {
+    var esitoLabel = r.esito === 'conforme' ? 'Conforme' : (r.esito === 'non_conforme' ? 'Non conforme' : (r.esito === 'incompleto' ? 'Incompleto' : '—'));
+    var dec = r.balance === 'setra' ? 3 : 2;
+    return '<tr>' +
+      '<td style="padding:5px 6px;border-bottom:1px solid var(--border)">' + escapeHtml(r.balanceName || r.balance || '') + '</td>' +
+      '<td style="padding:5px 6px;border-bottom:1px solid var(--border);text-align:center">' + escapeHtml(r.weight != null ? r.weight + ' g' : '—') + '</td>' +
+      '<td style="padding:5px 6px;border-bottom:1px solid var(--border);text-align:center">' + escapeHtml(r.media != null ? Number(r.media).toFixed(dec) : '—') + '</td>' +
+      '<td style="padding:5px 6px;border-bottom:1px solid var(--border);text-align:center">' + escapeHtml(r.errore != null ? Number(r.errore).toFixed(dec) : '—') + '</td>' +
+      '<td style="padding:5px 6px;border-bottom:1px solid var(--border);text-align:center;font-weight:700">' + escapeHtml(esitoLabel) + '</td>' +
+    '</tr>';
+  }).join('');
+  return '<div class="detail-grid">' +
+    '<div class="detail-block">' +
+      '<div class="detail-title">Riepilogo controllo bilance</div>' +
+      '<table class="summary-table">' +
+        '<tr><td>Data</td><td>' + escapeHtml((record.data || '—') + ' ' + (record.ora || '')) + '</td></tr>' +
+        '<tr><td>Operatore</td><td>' + escapeHtml(record.operatoreNome || record.operatore || '—') + '</td></tr>' +
+        '<tr><td>Responsabile QMS</td><td>' + escapeHtml(record.responsabileQms || '—') + '</td></tr>' +
+        '<tr><td>Esito</td><td>' + escapeHtml(record.esito === 'conforme' ? 'Conforme' : (record.esito === 'non_conforme' ? 'Non conforme' : 'Incompleto')) + '</td></tr>' +
+        '<tr><td>Note</td><td>' + escapeHtml(record.notes || '—') + '</td></tr>' +
+        '<tr><td>Archiviato</td><td>' + escapeHtml(formatTimestampLabel(getTimestampValue(record))) + '</td></tr>' +
+      '</table>' +
+    '</div>' +
+    '<div class="detail-block">' +
+      '<div class="detail-title">Pesate</div>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
+        '<tr style="font-weight:700;color:var(--text2)"><td style="padding:5px 6px">Bilancia</td><td style="padding:5px 6px;text-align:center">Carico</td><td style="padding:5px 6px;text-align:center">Media</td><td style="padding:5px 6px;text-align:center">Errore</td><td style="padding:5px 6px;text-align:center">Esito</td></tr>' +
+        rowsHtml +
+      '</table>' +
+    '</div>' +
+  '</div>';
+}
+
 function buildRecordDetailHtml(record) {
+  if (record._tipo === 'bilance') return buildRecordDetailHtmlBilance(record);
   var zoneRows = (record.zone || []).map(function(z, i) {
     if (!z) return '';
     return '<tr><td>' + escapeHtml((ZONE[i] && ZONE[i].nome) || ('Zona ' + (i + 1))) + '</td><td>' + escapeHtml(z.nc ? 'NC' : 'OK') + '</td></tr>';
@@ -2128,23 +2365,42 @@ function caricaStoricoRegistrazioni() {
     renderStoricoRegistrazioni();
     return Promise.resolve();
   }
-  return firestoreDB.collection('qms_temperature').get()
+  var pTemp = firestoreDB.collection('qms_temperature').get()
     .then(function(snapshot) {
       var loaded = [];
       snapshot.forEach(function(doc) {
-        loaded.push(normalizeHistoricalRecord(doc.data(), doc.id));
+        var r = normalizeHistoricalRecord(doc.data(), doc.id);
+        r._tipo = 'temperature';
+        loaded.push(r);
       });
-      loaded.sort(function(a, b) {
-        return String(getTimestampValue(b)).localeCompare(String(getTimestampValue(a)));
-      });
-      state.storicoRecords = loaded.slice(0, 40);
-      renderStoricoRegistrazioni();
+      return loaded;
     })
     .catch(function(err) {
-      console.error('Errore storico registrazioni:', err && err.code);
-      state.storicoRecords = [];
-      renderStoricoRegistrazioni();
+      console.error('Errore storico temperature:', err && err.code);
+      return [];
     });
+  var pBil = firestoreDB.collection('qms_bilance').get()
+    .then(function(snapshot) {
+      var loaded = [];
+      snapshot.forEach(function(doc) {
+        var r = Object.assign({ _id: doc.id }, doc.data());
+        r._tipo = 'bilance';
+        loaded.push(r);
+      });
+      return loaded;
+    })
+    .catch(function(err) {
+      console.error('Errore storico bilance:', err && err.code);
+      return [];
+    });
+  return Promise.all([pTemp, pBil]).then(function(results) {
+    var loaded = results[0].concat(results[1]);
+    loaded.sort(function(a, b) {
+      return String(getTimestampValue(b)).localeCompare(String(getTimestampValue(a)));
+    });
+    state.storicoRecords = loaded.slice(0, 60);
+    renderStoricoRegistrazioni();
+  });
 }
 
 function renderOperatoriLogin(operatori) {
@@ -2256,7 +2512,21 @@ async function verificaPin() {
     if (loaded.length > 0) OPERATORI = loaded.filter(function(o){ return o.attivo !== false; });
   }).catch(function(){});
 
-  avviaForm();
+  routeAfterLogin();
+}
+
+// ─────────────────────────────────────────────
+// ROUTING POST-LOGIN — Temperature (default) o Bilance
+// ─────────────────────────────────────────────
+function routeAfterLogin() {
+  if (state.pendingBilance) {
+    state.pendingBilance = false;
+    var btn = document.getElementById('btn-bilance-mode');
+    if (btn) { btn.classList.remove('active'); btn.textContent = '⚖️ Controllo annuale bilance'; }
+    avviaBilance();
+  } else {
+    avviaForm();
+  }
 }
 
 function loginOperatoreDaAuth(user) {
@@ -2270,7 +2540,7 @@ function loginOperatoreDaAuth(user) {
   aggiornaDotsLogin();
   document.getElementById('pin-error').textContent = '';
   showToast('Accesso da launcher: ' + op.nome, 'success');
-  avviaForm();
+  routeAfterLogin();
 }
 
 // ─────────────────────────────────────────────
@@ -2407,6 +2677,213 @@ function aggiornaBtnProcedi() {
   });
   var anomalieComplete = (state.sensorAnomalie || []).every(function(a){ return a.documentato; });
   document.getElementById('btn-procedi').disabled = !(tutteCompilate && anomalieComplete);
+}
+
+// ─────────────────────────────────────────────
+// BILANCE — Controllo annuale
+// ─────────────────────────────────────────────
+function attivaModalitaBilance() {
+  state.pendingBilance = !state.pendingBilance;
+  var btn = document.getElementById('btn-bilance-mode');
+  if (!btn) return;
+  btn.classList.toggle('active', state.pendingBilance);
+  btn.textContent = state.pendingBilance
+    ? '⚖️ Modalità bilance attiva — scegli operatore'
+    : '⚖️ Controllo annuale bilance';
+}
+
+function fmtBil(n, d) {
+  d = d || 3;
+  return Number.isFinite(n) ? n.toFixed(d) : '-';
+}
+function meanBil(a) {
+  return a.length ? a.reduce(function(x, y){ return x + y; }, 0) / a.length : NaN;
+}
+function bilStatusText(ok, complete) {
+  if (!complete) return '<span class="bil-esito-pending">DA COMPILARE</span>';
+  return ok ? '<span class="bil-esito-ok">CONFORME</span>' : '<span class="bil-esito-ko">NON CONFORME</span>';
+}
+
+function createBilanceRows() {
+  var body = document.getElementById('bil-rows');
+  body.innerHTML = '';
+  BIL_BALANCES.forEach(function(b) {
+    BIL_WEIGHTS.forEach(function(w) {
+      var tol = b.tols[w];
+      var tr = document.createElement('tr');
+      tr.dataset.balance = b.id;
+      tr.dataset.weight = w;
+      tr.dataset.tol = (tol === null || tol === undefined) ? '' : tol;
+      var disabled = tol === null ? 'disabled' : '';
+      var note = tol === null ? 'Non applicabile se portata max 410 g' : '';
+      tr.innerHTML =
+        '<td class="left">' + b.name + '</td><td>' + w + ' g</td>' +
+        '<td><input id="' + b.id + '_' + w + '_1" type="number" step="' + b.step + '" ' + disabled + '></td>' +
+        '<td><input id="' + b.id + '_' + w + '_2" type="number" step="' + b.step + '" ' + disabled + '></td>' +
+        '<td><input id="' + b.id + '_' + w + '_3" type="number" step="' + b.step + '" ' + disabled + '></td>' +
+        '<td id="' + b.id + '_' + w + '_mean" class="bil-calc">-</td>' +
+        '<td id="' + b.id + '_' + w + '_err" class="bil-calc">-</td>' +
+        '<td>' + (tol === null ? 'N/A' : ('&plusmn; ' + fmtBil(tol, tol < 0.1 ? 3 : 2))) + '</td>' +
+        '<td id="' + b.id + '_' + w + '_res">' + (tol === null ? '<span class="bil-esito-pending">N/A</span>' : bilStatusText(false, false)) + '</td>' +
+        '<td><input id="' + b.id + '_' + w + '_note" type="text" value="' + note + '"></td>';
+      body.appendChild(tr);
+      tr.querySelectorAll('input').forEach(function(inp) {
+        inp.addEventListener('input', calcolaBilance);
+        inp.addEventListener('change', calcolaBilance);
+      });
+    });
+  });
+}
+
+function calcolaBilance() {
+  var complete = true, ok = true;
+  var rowsData = [];
+  document.querySelectorAll('#bil-rows tr').forEach(function(tr) {
+    var b = tr.dataset.balance, w = parseFloat(tr.dataset.weight), tol = parseFloat(tr.dataset.tol);
+    if (!Number.isFinite(tol)) return;
+    var vals = [1, 2, 3].map(function(i) {
+      return parseFloat(document.getElementById(b + '_' + w + '_' + i).value);
+    }).filter(Number.isFinite);
+    var done = vals.length === 3;
+    var avg = meanBil(vals);
+    var err = done ? avg - w : NaN;
+    var pass = done && Math.abs(err) <= tol;
+    var dec = b === 'setra' ? 3 : 2;
+    document.getElementById(b + '_' + w + '_mean').textContent = fmtBil(avg, dec);
+    document.getElementById(b + '_' + w + '_err').textContent = fmtBil(err, dec);
+    document.getElementById(b + '_' + w + '_res').innerHTML = bilStatusText(pass, done);
+    complete = complete && done;
+    ok = ok && pass;
+    rowsData.push({
+      balance: b,
+      balanceName: (BIL_BALANCES.filter(function(x){ return x.id === b; })[0] || {}).name,
+      weight: w, m1: vals[0], m2: vals[1], m3: vals[2],
+      media: done ? avg : null, errore: done ? err : null, tolleranza: tol,
+      esito: done ? (pass ? 'conforme' : 'non_conforme') : 'incompleto',
+      nota: (document.getElementById(b + '_' + w + '_note') || {}).value || ''
+    });
+  });
+
+  var sz  = parseFloat(document.getElementById('bil-setraZero').value);
+  var mz  = parseFloat(document.getElementById('bil-mettlerZero').value);
+  var szt = parseFloat(document.getElementById('bil-setraZeroTol').value);
+  var mzt = parseFloat(document.getElementById('bil-mettlerZeroTol').value);
+  var prelim = document.getElementById('bil-cond1').checked && document.getElementById('bil-cond2').checked;
+  var weightsStateOk = document.getElementById('bil-weightsState').value === 'Integro e pulito';
+  var requiredFilled = document.getElementById('bil-weightsOwner').value.trim() !== '' &&
+                        document.getElementById('bil-weightsId').value.trim() !== '';
+
+  complete = complete && Number.isFinite(sz) && Number.isFinite(mz) && prelim && requiredFilled;
+  ok = ok && Math.abs(sz) <= szt && Math.abs(mz) <= mzt && prelim && requiredFilled && weightsStateOk;
+
+  var box = document.getElementById('bil-summary');
+  box.className = 'bil-summary';
+  if (!complete) {
+    box.textContent = 'VERIFICA NON COMPLETATA';
+  } else if (ok) {
+    box.classList.add('good');
+    box.textContent = "VERIFICA SUPERATA - BILANCE IDONEE ALL'USO ORDINARIO INTERNO";
+  } else {
+    box.classList.add('bad');
+    box.textContent = "VERIFICA NON SUPERATA - SOSPENDERE O LIMITARE L'USO E VALUTARE VERIFICA ESTERNA";
+  }
+
+  state.bilanceData.rows = rowsData;
+  state.bilanceData.complete = complete;
+  state.bilanceData.ok = ok;
+  return { complete: complete, ok: ok };
+}
+
+function avviaBilance() {
+  var dt = getDataOra();
+  state.flowType = 'bilance';
+  state.bilanceData = {
+    data: dt.data, ora: dt.ora, mese: dt.mese, isoMese: dt.isoMese,
+    operatore: state.operatoreCorrente.sigla,
+    operatoreNome: state.operatoreCorrente.nome,
+    timestampCreazione: new Date().toISOString(),
+  };
+
+  document.getElementById('bilance-op-name').textContent = state.operatoreCorrente.nome;
+  document.getElementById('bilance-hdr-date').textContent = dt.data;
+  document.getElementById('bilance-hdr-time').textContent = dt.ora;
+
+  document.getElementById('bil-qms').value = '';
+  document.getElementById('bil-location').value = '';
+  document.getElementById('bil-weightsOwner').value = '';
+  document.getElementById('bil-weightsId').value = '';
+  document.getElementById('bil-weightsCert').value = 'Non certificati';
+  document.getElementById('bil-weightsState').value = 'Integro e pulito';
+  document.getElementById('bil-cond1').checked = false;
+  document.getElementById('bil-cond2').checked = false;
+  document.getElementById('bil-setraZero').value = '';
+  document.getElementById('bil-setraZeroTol').value = '0.005';
+  document.getElementById('bil-mettlerZero').value = '';
+  document.getElementById('bil-mettlerZeroTol').value = '0.02';
+  document.getElementById('bil-notes').value = '';
+
+  createBilanceRows();
+  calcolaBilance();
+
+  document.getElementById('btn-bilance-save').style.display = '';
+  document.getElementById('btn-bilance-save').disabled = false;
+  document.getElementById('btn-bilance-save').textContent = '💾 Salva controllo bilance';
+  document.getElementById('btn-bilance-print').style.display = 'none';
+  document.getElementById('btn-bilance-nuovo').style.display = 'none';
+
+  ['bil-weightsOwner', 'bil-weightsId', 'bil-weightsState', 'bil-cond1', 'bil-cond2',
+   'bil-setraZero', 'bil-mettlerZero', 'bil-setraZeroTol', 'bil-mettlerZeroTol'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) { el.oninput = calcolaBilance; el.onchange = calcolaBilance; }
+  });
+
+  showScreen('screen-bilance');
+}
+
+async function salvaBilance() {
+  var res = calcolaBilance();
+  var btn = document.getElementById('btn-bilance-save');
+  btn.disabled = true;
+  btn.textContent = '⏳ Salvataggio...';
+
+  var record = Object.assign({}, state.bilanceData, {
+    responsabileQms: document.getElementById('bil-qms').value,
+    locale: document.getElementById('bil-location').value,
+    weightsOwner: document.getElementById('bil-weightsOwner').value,
+    weightsId: document.getElementById('bil-weightsId').value,
+    weightsCert: document.getElementById('bil-weightsCert').value,
+    weightsState: document.getElementById('bil-weightsState').value,
+    cond1: document.getElementById('bil-cond1').checked,
+    cond2: document.getElementById('bil-cond2').checked,
+    setraZero: parseFloat(document.getElementById('bil-setraZero').value),
+    setraZeroTol: parseFloat(document.getElementById('bil-setraZeroTol').value),
+    mettlerZero: parseFloat(document.getElementById('bil-mettlerZero').value),
+    mettlerZeroTol: parseFloat(document.getElementById('bil-mettlerZeroTol').value),
+    notes: document.getElementById('bil-notes').value,
+    rows: state.bilanceData.rows || [],
+    completo: res.complete,
+    esito: res.complete ? (res.ok ? 'conforme' : 'non_conforme') : 'incompleto',
+    firmato: true,
+    firmaTimestamp: new Date().toISOString(),
+    versione: 'FA-SQ-B-01-Rev1',
+  });
+
+  if (FIREBASE_ENABLED && firestoreDB) {
+    try {
+      var docRef = await firestoreDB.collection('qms_bilance').add(record);
+      state.firestoreId = docRef.id;
+      showToast('Controllo bilance salvato', 'ok');
+    } catch (e) {
+      console.error('Firestore save error (bilance):', e && e.code);
+      showToast('Salvataggio cloud fallito — puoi comunque stampare', 'warn');
+    }
+  }
+
+  state.recordCorrente = record;
+  btn.style.display = 'none';
+  document.getElementById('btn-bilance-print').style.display = '';
+  document.getElementById('btn-bilance-nuovo').style.display = '';
+  caricaStoricoRegistrazioni();
 }
 
 // ─────────────────────────────────────────────
@@ -2924,10 +3401,21 @@ function nuovaVerifica() {
   state.pdfDoc = null;
   state.firestoreId = null;
   state.recordCorrente = null;
+  state.flowType = 'temperature';
+  state.pendingBilance = false;
+  state.bilanceData = {};
   document.querySelectorAll('.op-btn').forEach(function(b){ b.classList.remove('selected'); });
   document.getElementById('pin-section').style.display = 'none';
   document.getElementById('pin-error').textContent = '';
   aggiornaDotsLogin();
+  var bilModeBtn = document.getElementById('btn-bilance-mode');
+  if (bilModeBtn) { bilModeBtn.classList.remove('active'); bilModeBtn.textContent = '⚖️ Controllo annuale bilance'; }
+  var bilSaveBtn = document.getElementById('btn-bilance-save');
+  if (bilSaveBtn) { bilSaveBtn.style.display = ''; bilSaveBtn.disabled = false; bilSaveBtn.textContent = '💾 Salva controllo bilance'; }
+  var bilPrintBtn = document.getElementById('btn-bilance-print');
+  if (bilPrintBtn) bilPrintBtn.style.display = 'none';
+  var bilNuovoBtn = document.getElementById('btn-bilance-nuovo');
+  if (bilNuovoBtn) bilNuovoBtn.style.display = 'none';
   showScreen('screen-login');
 }
 
