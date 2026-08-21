@@ -2364,10 +2364,7 @@ function buildRecordDetailHtmlBilance(record) {
         '<tr><td>Note</td><td>' + escapeHtml(record.notes || '—') + '</td></tr>' +
         '<tr><td>Archiviato</td><td>' + escapeHtml(formatTimestampLabel(getTimestampValue(record))) + '</td></tr>' +
       '</table>' +
-      '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">' +
-        (isNewFormat ? '<button class="btn btn-outline" type="button" onclick="apriBilanceRecordCompleto(state.storicoRecords[' + state.storicoRecords.indexOf(record) + '])">🖨️ Scheda completa e stampa</button>' : '') +
-        '<button class="btn btn-outline" type="button" style="color:var(--danger);border-color:var(--danger)" onclick="eliminaRecordStorico(state.storicoRecords[' + state.storicoRecords.indexOf(record) + '])">🗑️ Elimina registrazione</button>' +
-      '</div>' +
+      (isNewFormat ? '<div style="margin-top:12px"><button class="btn btn-outline" type="button" onclick="apriBilanceRecordCompleto(state.storicoRecords[' + state.storicoRecords.indexOf(record) + '])">👁️ Vedi dettaglio misurazioni</button></div>' : '') +
     '</div>' +
     '<div class="detail-block">' +
       '<div class="detail-title">Pesate</div>' +
@@ -2378,6 +2375,9 @@ function buildRecordDetailHtmlBilance(record) {
     '</div>' +
     confrontoBlock +
     warningsBlock +
+    '<div class="detail-block" style="margin-top:4px;padding-top:14px;border-top:1px dashed var(--border)">' +
+      '<button class="btn btn-outline" type="button" style="color:var(--danger);border-color:var(--danger)" onclick="eliminaRecordStorico(state.storicoRecords[' + state.storicoRecords.indexOf(record) + '])">🗑️ Elimina registrazione</button>' +
+    '</div>' +
   '</div>';
 }
 
@@ -2416,10 +2416,7 @@ function buildRecordDetailHtml(record) {
         '<tr><td>Esito</td><td>' + escapeHtml(record.nc ? 'Non conformità' : 'Conforme') + '</td></tr>' +
         '<tr><td>Archiviato</td><td>' + escapeHtml(formatTimestampLabel(getTimestampValue(record))) + '</td></tr>' +
       '</table>' +
-      '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">' +
-        '<button class="btn btn-ghost" type="button" onclick="downloadHistoryPdf(' + state.storicoRecords.indexOf(record) + ')">📄 PDF stampabile</button>' +
-        '<button class="btn btn-outline" type="button" style="color:var(--danger);border-color:var(--danger)" onclick="eliminaRecordStorico(state.storicoRecords[' + state.storicoRecords.indexOf(record) + '])">🗑️ Elimina registrazione</button>' +
-      '</div>' +
+      '<div style="margin-top:12px"><button class="btn btn-ghost" type="button" onclick="downloadHistoryPdf(' + state.storicoRecords.indexOf(record) + ')">📄 PDF stampabile</button></div>' +
     '</div>' +
     '<div class="detail-block">' +
       '<div class="detail-title">Esito zone</div>' +
@@ -2427,6 +2424,9 @@ function buildRecordDetailHtml(record) {
     '</div>' +
     sensorBlock +
     anomalieBlock +
+    '<div class="detail-block" style="margin-top:4px;padding-top:14px;border-top:1px dashed var(--border)">' +
+      '<button class="btn btn-outline" type="button" style="color:var(--danger);border-color:var(--danger)" onclick="eliminaRecordStorico(state.storicoRecords[' + state.storicoRecords.indexOf(record) + '])">🗑️ Elimina registrazione</button>' +
+    '</div>' +
   '</div>';
 }
 
@@ -3149,6 +3149,7 @@ function avviaBilance() {
   document.getElementById('btn-bilance-save').style.display = '';
   document.getElementById('btn-bilance-save').disabled = false;
   document.getElementById('btn-bilance-save').textContent = '💾 Salva controllo bilance';
+  document.getElementById('btn-bilance-save').onclick = salvaBilance;
   document.getElementById('btn-bilance-print').style.display = 'none';
   document.getElementById('btn-bilance-nuovo').style.display = 'none';
 
@@ -3302,6 +3303,7 @@ function caricaBilanceRecordSalvato(record) {
   state.bilanceBackTarget = state.bilanceBackTarget || 'screen-form';
   state.bilanceData = Object.assign({}, record);
   state.recordCorrente = record;
+  var completabile = record.esito === 'incompleto' && !!record._id;
 
   document.getElementById('bilance-op-name').textContent = record.operatoreNome || record.operatore || '—';
   document.getElementById('bilance-hdr-date').textContent = record.data || '—';
@@ -3338,10 +3340,23 @@ function caricaBilanceRecordSalvato(record) {
   calcolaBilance();
 
   document.querySelectorAll('#screen-bilance input, #screen-bilance select, #screen-bilance textarea').forEach(function(el) {
-    el.disabled = true;
+    el.disabled = !completabile;
   });
-  document.getElementById('btn-bilance-save').style.display = 'none';
-  document.getElementById('btn-bilance-print').style.display = '';
+  if (completabile) {
+    document.getElementById('btn-bilance-save').style.display = '';
+    document.getElementById('btn-bilance-save').disabled = false;
+    document.getElementById('btn-bilance-save').textContent = '💾 Completa e salva';
+    document.getElementById('btn-bilance-save').onclick = function() { completaBilanceEsistente(record._id); };
+    document.getElementById('btn-bilance-print').style.display = 'none';
+    ['bil-weightsOwner', 'bil-weightsId', 'bil-weightsState', 'bil-cond1', 'bil-cond2',
+     'bil-setraZero', 'bil-mettlerZero', 'bil-setraZeroTol', 'bil-mettlerZeroTol'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) { el.oninput = calcolaBilance; el.onchange = calcolaBilance; }
+    });
+  } else {
+    document.getElementById('btn-bilance-save').style.display = 'none';
+    document.getElementById('btn-bilance-print').style.display = '';
+  }
   document.getElementById('btn-bilance-nuovo').style.display = '';
 
   showScreen('screen-bilance');
@@ -3381,13 +3396,8 @@ function chiudiModaleSalvataggioBilance() {
   document.getElementById('bil-save-modal-overlay').classList.remove('show');
 }
 
-async function salvaBilance() {
-  var res = calcolaBilance();
-  var btn = document.getElementById('btn-bilance-save');
-  btn.disabled = true;
-  btn.textContent = '⏳ Salvataggio...';
-
-  var record = Object.assign({}, state.bilanceData, {
+function raccogliDatiFormBilance(res) {
+  return Object.assign({}, state.bilanceData, {
     responsabileQms: document.getElementById('bil-qms').value,
     locale: document.getElementById('bil-location').value,
     weightsOwner: document.getElementById('bil-weightsOwner').value,
@@ -3410,6 +3420,44 @@ async function salvaBilance() {
     firmaTimestamp: new Date().toISOString(),
     versione: 'FA-SQ-B-01-Rev2',
   });
+}
+
+async function completaBilanceEsistente(docId) {
+  var res = calcolaBilance();
+  var btn = document.getElementById('btn-bilance-save');
+  btn.disabled = true;
+  btn.textContent = '⏳ Salvataggio...';
+
+  var record = raccogliDatiFormBilance(res);
+
+  try {
+    await bilConTimeout(firestoreDB.collection('qms_bilance').doc(docId).update(record), BIL_SAVE_TIMEOUT_MS);
+    state.recordCorrente = record;
+    caricaStoricoRegistrazioni();
+    if (res.complete) {
+      showToast('Controllo bilance completato e salvato', 'ok');
+      document.querySelectorAll('#screen-bilance input, #screen-bilance select, #screen-bilance textarea').forEach(function(el) { el.disabled = true; });
+      btn.style.display = 'none';
+      document.getElementById('btn-bilance-print').style.display = '';
+    } else {
+      showToast('Modifiche salvate — la verifica risulta ancora incompleta', 'warn');
+      btn.disabled = false;
+      btn.textContent = '💾 Completa e salva';
+    }
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = '💾 Completa e salva';
+    showToast('Salvataggio non riuscito: ' + bilErroreLeggibile(e), 'warn');
+  }
+}
+
+async function salvaBilance() {
+  var res = calcolaBilance();
+  var btn = document.getElementById('btn-bilance-save');
+  btn.disabled = true;
+  btn.textContent = '⏳ Salvataggio...';
+
+  var record = raccogliDatiFormBilance(res);
 
   var saved = false, errorInfo = '';
   if (FIREBASE_ENABLED && firestoreDB) {
