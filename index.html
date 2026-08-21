@@ -705,6 +705,13 @@ body {
 .bil-warnings-title { font-weight: 800; font-size: 12px; color: var(--warning); margin-bottom: 6px; }
 .bil-warnings-item { font-size: 12px; color: var(--text); line-height: 1.5; margin-top: 2px; }
 
+.bil-missing {
+  margin-top: 10px; padding: 12px 14px; border: 1.5px solid var(--info); border-radius: var(--radius);
+  background: var(--info-light);
+}
+.bil-missing-title { font-weight: 800; font-size: 12px; color: var(--info); margin-bottom: 6px; }
+.bil-missing-item { font-size: 12px; color: var(--text); line-height: 1.5; margin-top: 2px; }
+
 .bil-save-modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 9998;
   display: none; align-items: center; justify-content: center; padding: 20px;
@@ -1421,6 +1428,7 @@ body {
       </div>
 
       <div id="bil-summary" class="bil-summary">VERIFICA NON COMPLETATA</div>
+      <div id="bil-missing" class="bil-missing no-print" style="display:none"></div>
 
       <div class="print-only bil-signature-print">
         <div class="bil-signature-line">
@@ -2356,7 +2364,10 @@ function buildRecordDetailHtmlBilance(record) {
         '<tr><td>Note</td><td>' + escapeHtml(record.notes || '—') + '</td></tr>' +
         '<tr><td>Archiviato</td><td>' + escapeHtml(formatTimestampLabel(getTimestampValue(record))) + '</td></tr>' +
       '</table>' +
-      '<div style="margin-top:12px"><button class="btn btn-outline" type="button" style="color:var(--danger);border-color:var(--danger)" onclick="eliminaRecordStorico(state.storicoRecords[' + state.storicoRecords.indexOf(record) + '])">🗑️ Elimina registrazione</button></div>' +
+      '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">' +
+        (isNewFormat ? '<button class="btn btn-outline" type="button" onclick="apriBilanceRecordCompleto(state.storicoRecords[' + state.storicoRecords.indexOf(record) + '])">🖨️ Scheda completa e stampa</button>' : '') +
+        '<button class="btn btn-outline" type="button" style="color:var(--danger);border-color:var(--danger)" onclick="eliminaRecordStorico(state.storicoRecords[' + state.storicoRecords.indexOf(record) + '])">🗑️ Elimina registrazione</button>' +
+      '</div>' +
     '</div>' +
     '<div class="detail-block">' +
       '<div class="detail-title">Pesate</div>' +
@@ -2948,6 +2959,7 @@ function calcolaBilance() {
   var complete = true, ok = true;
   var rowsData = [];
   var byWeight = {};
+  var mancanti = [];
 
   document.querySelectorAll('#bil-rows tr').forEach(function(tr) {
     var bId = tr.dataset.balance, w = parseFloat(tr.dataset.weight);
@@ -2974,6 +2986,7 @@ function calcolaBilance() {
 
     complete = complete && done;
     ok = ok && rowOk;
+    if (!done) mancanti.push('Pesate ' + balance.name + ' — ' + w + ' g');
 
     byWeight[w] = byWeight[w] || {};
     byWeight[w][bId] = { mean: meanAll, meanOld: meanOld, meanTemu: meanTemu, done: done };
@@ -3045,6 +3058,13 @@ function calcolaBilance() {
   var requiredFilled = document.getElementById('bil-weightsOwner').value.trim() !== '' &&
                         document.getElementById('bil-weightsId').value.trim() !== '';
 
+  if (!Number.isFinite(sz)) mancanti.push('Zero residuo Setra dopo prove');
+  if (!Number.isFinite(mz)) mancanti.push('Zero residuo Mettler dopo prove');
+  if (!document.getElementById('bil-cond1').checked) mancanti.push('Conferma "Bilance accese, stabilizzate, livellate e pulite"');
+  if (!document.getElementById('bil-cond2').checked) mancanti.push('Conferma "Piano stabile, senza correnti d\'aria, vibrazioni o fonti di calore"');
+  if (document.getElementById('bil-weightsOwner').value.trim() === '') mancanti.push('Origine / prestatore pesi');
+  if (document.getElementById('bil-weightsId').value.trim() === '') mancanti.push('Identificazione set pesi');
+
   complete = complete && Number.isFinite(sz) && Number.isFinite(mz) && prelim && requiredFilled;
   ok = ok && Math.abs(sz) <= szt && Math.abs(mz) <= mzt && prelim && requiredFilled && weightsStateOk;
 
@@ -3069,6 +3089,18 @@ function calcolaBilance() {
     } else {
       warnBox.style.display = 'none';
       warnBox.innerHTML = '';
+    }
+  }
+
+  var missingBox = document.getElementById('bil-missing');
+  if (missingBox) {
+    if (!complete && mancanti.length) {
+      missingBox.style.display = '';
+      missingBox.innerHTML = '<div class="bil-missing-title">Per completare la verifica manca ancora:</div>' +
+        mancanti.map(function(m){ return '<div class="bil-missing-item">• ' + escapeHtml(m) + '</div>'; }).join('');
+    } else {
+      missingBox.style.display = 'none';
+      missingBox.innerHTML = '';
     }
   }
 
@@ -3228,14 +3260,19 @@ function apriBilancePendingList() {
   document.getElementById('sensor-modal').classList.add('active');
 }
 
+function apriBilanceRecordCompleto(record) {
+  if (!record) return;
+  var inCorso = document.getElementById('btn-bilance-save') && document.getElementById('btn-bilance-save').style.display !== 'none'
+    && document.getElementById('bil-weightsOwner').value.trim() !== '';
+  if (inCorso && !confirm('Aprire questa registrazione sostituisce i dati del controllo in corso non ancora salvato. Continuare?')) return;
+  document.getElementById('sensor-modal').classList.remove('active');
+  caricaBilanceRecordSalvato(record);
+}
+
 function apriBilancePendingRecord(localId) {
   var item = bilPendingGetAll().filter(function(p){ return p.localId === localId; })[0];
   if (!item) return;
-  var inCorso = document.getElementById('btn-bilance-save') && document.getElementById('btn-bilance-save').style.display !== 'none'
-    && document.getElementById('bil-weightsOwner').value.trim() !== '';
-  if (inCorso && !confirm('Aprire questa taratura salvata in locale sostituisce i dati del controllo in corso non ancora salvato. Continuare?')) return;
-  document.getElementById('sensor-modal').classList.remove('active');
-  caricaBilanceRecordSalvato(item.record);
+  apriBilanceRecordCompleto(item.record);
 }
 
 async function bilRiprovaSingolo(localId) {
