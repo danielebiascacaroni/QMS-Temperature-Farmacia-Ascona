@@ -744,6 +744,16 @@ body {
     border: 0; border-bottom: 1px solid #999; border-radius: 0; background: transparent; color: #000;
   }
 
+  /* Titolo del rapporto, in una bolla come le altre card (l'header a schermo è nascosto in stampa, altrimenti non ci sarebbe alcun titolo) */
+  .bil-print-title {
+    font-size: 24px; font-weight: 800; text-align: center;
+    padding: 14px 10px; margin-bottom: 10px;
+    border: 1px solid var(--border); border-radius: var(--radius);
+  }
+
+  /* Contenitore a piena altezza pagina: serve solo a spingere .bil-signature-rules (la riga da firmare) in fondo */
+  #screen-bilance .content { display: flex; flex-direction: column; min-height: 100vh; }
+
   /* Intestazione dati/condizioni compatta: la parte importante è la tabella pesate */
   #bil-card-meta { padding: 6px 8px; margin-bottom: 6px; }
   #bil-card-meta .card-title { font-size: 11px; margin-bottom: 4px; }
@@ -782,12 +792,16 @@ body {
 
   .bil-summary { padding: 6px; font-size: 12px; margin-top: 6px; }
 
-  /* Firma: etichetta sopra, riga per firmare/datare sotto — lo spazio bianco resta protetto sopra la riga, mai tagliato da un a-capo pagina */
-  .bil-signature-print { margin-top: 24px; break-inside: avoid; }
-  .bil-signature-print .bil-signature-line { display: flex; justify-content: space-between; gap: 30px; }
-  .bil-signature-cell { flex: 1; font-size: 11px; }
+  /* Dicitura + etichette Firma/Data: scorrono normalmente subito dopo l'esito, le etichette stanno 2 righe sotto la dicitura */
+  .bil-signature-print { margin-top: 20px; }
+  .bil-signature-statement { font-size: 14px; margin-bottom: 34px; }
+  .bil-signature-print .bil-signature-line { display: flex; justify-content: space-between; gap: 30px; font-size: 18px; font-weight: 800; }
+  .bil-signature-cell { flex: 1; }
   .bil-signature-cell-data { max-width: 140px; }
-  .bil-signature-rule { margin-top: 30px; border-top: 1px solid #000; }
+
+  /* La riga vera e propria su cui firmare: spinta in fondo alla pagina (margin-top:auto nel contenitore a piena altezza), ampio spazio bianco sopra per firmare/datare a mano */
+  .bil-signature-rules { margin-top: auto; padding-top: 60px; display: flex; justify-content: space-between; gap: 30px; break-inside: avoid; }
+  .bil-signature-rule-cell { flex: 1; border-top: 1px solid #000; }
 }
 
 /* ════════════════════════════════════════════════════
@@ -1336,6 +1350,8 @@ body {
         <button class="btn btn-ghost" type="button" style="margin-top:10px" onclick="apriBilancePendingList()">🗂️ Tarature salvate solo in locale</button>
       </div>
 
+      <div class="print-only bil-print-title">Taratura Annuale Bilance — Farmacia Ascona</div>
+
       <div class="bil-note">
         Verifica interna QMS con pesi prestati non accompagnati da certificato di taratura. Il controllo non ha valore di taratura accreditata o verifica metrologica ufficiale: serve a confermare l'idoneità pratica delle bilance per l'uso ordinario in farmacia. In caso di non conformità, dubbio o uso critico, sospendere l'uso della bilancia interessata e richiedere verifica esterna o manutenzione.
       </div>
@@ -1451,16 +1467,16 @@ body {
       <div id="bil-missing" class="bil-missing no-print" style="display:none"></div>
 
       <div class="print-only bil-signature-print">
+        <div class="bil-signature-statement" id="bil-signature-statement"></div>
         <div class="bil-signature-line">
-          <div class="bil-signature-cell">
-            <div class="bil-signature-label">Firma responsabile QMS</div>
-            <div class="bil-signature-rule"></div>
-          </div>
-          <div class="bil-signature-cell bil-signature-cell-data">
-            <div class="bil-signature-label">Data</div>
-            <div class="bil-signature-rule"></div>
-          </div>
+          <div class="bil-signature-cell">Firma responsabile QMS</div>
+          <div class="bil-signature-cell bil-signature-cell-data">Data</div>
         </div>
+      </div>
+
+      <div class="print-only bil-signature-rules">
+        <div class="bil-signature-rule-cell"></div>
+        <div class="bil-signature-rule-cell bil-signature-cell-data"></div>
       </div>
 
       <button class="btn btn-primary no-print" id="btn-bilance-save" style="margin-top:14px" onclick="salvaBilance()">
@@ -1472,7 +1488,7 @@ body {
       <button class="btn btn-outline no-print" id="btn-bilance-nuovo" style="margin-top:12px;display:none" onclick="nuovaVerifica()">
         ↩ Torna al login
       </button>
-      <div style="height:40px"></div>
+      <div class="no-print" style="height:40px"></div>
 
     </div>
   </div><!-- /screen-bilance -->
@@ -3135,6 +3151,14 @@ function calcolaBilance() {
   state.bilanceData.warnings = warnings;
   state.bilanceData.complete = complete;
   state.bilanceData.ok = ok;
+
+  var statementBox = document.getElementById('bil-signature-statement');
+  if (statementBox) {
+    var nomeOperatore = state.bilanceData.operatoreNome || (state.operatoreCorrente && state.operatoreCorrente.nome) || '—';
+    var dataRapporto = state.bilanceData.data || getDataOra().data;
+    statementBox.textContent = 'La taratura annuale delle bilance della Farmacia Ascona è stata effettuata da ' + nomeOperatore + ' il ' + dataRapporto + '.';
+  }
+
   return { complete: complete, ok: ok };
 }
 
