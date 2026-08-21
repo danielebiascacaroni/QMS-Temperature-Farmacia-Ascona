@@ -757,17 +757,37 @@ body {
 
   /* Le pesate restano tutte su una pagina */
   #bil-card-pesate, .bil-table-wrap, .bil-table { break-inside: avoid; }
-  #bil-card-pesate .card-title { font-size: 12px; }
+  #bil-card-pesate { padding: 8px 10px; margin-bottom: 6px; }
+  #bil-card-pesate .card-title { font-size: 12px; margin-bottom: 4px; }
   #bil-card-pesate > p { display: none; }
 
-  /* Da qui in poi (zero, note, esito, firma) sempre a pagina 2 */
-  #bil-card-zero { break-before: page; }
+  /* Tutto il resto compattato per stare in 1 pagina (specificità volutamente bassa: non deve scavalcare gli override più specifici già sopra) */
+  .card { padding: 8px 10px; margin-bottom: 6px; }
+  .card-title { font-size: 11px; margin-bottom: 4px; }
+  .bil-warnings { padding: 6px 8px; margin-top: 6px; }
+  .bil-warnings-title { font-size: 10px; margin-bottom: 3px; }
+  .bil-warnings-item { font-size: 10px; margin-top: 1px; }
 
-  .bil-signature-print { margin-top: 74px; }
-  .bil-signature-print .bil-signature-line {
-    margin-top: 36px; border-top: 1px solid #000; padding-top: 4px;
-    display: flex; justify-content: space-between; font-size: 11px;
-  }
+  /* Ritorno a zero integrato visivamente nella card di confronto: nessuna interruzione, nessun bordo doppio, 1 riga compatta */
+  #bil-card-confronto { margin-bottom: 0; border-bottom: 0; border-radius: var(--radius) var(--radius) 0 0; padding-bottom: 4px; }
+  #bil-card-zero { margin-top: 0; border-top: 0; border-radius: 0 0 var(--radius) var(--radius); padding-top: 4px; break-before: avoid; break-inside: avoid; }
+  #bil-card-zero .card-title { font-size: 9px; color: #999; margin-bottom: 3px; }
+  #bil-card-zero .bil-grid-2 { grid-template-columns: repeat(4, 1fr); gap: 2px 10px; }
+  #bil-card-zero .form-group { margin-bottom: 0; }
+  #bil-card-zero .form-label { font-size: 8px; margin-bottom: 0; }
+  #bil-card-zero .form-input { font-size: 10px; padding: 2px 0; }
+
+  /* Note aggiuntive: molto più compatte, niente spazio bianco sprecato */
+  #bil-card-notes .form-textarea { font-size: 10px; padding: 3px 4px; min-height: 22px; }
+
+  .bil-summary { padding: 6px; font-size: 12px; margin-top: 6px; }
+
+  /* Firma: etichetta sopra, riga per firmare/datare sotto — lo spazio bianco resta protetto sopra la riga, mai tagliato da un a-capo pagina */
+  .bil-signature-print { margin-top: 24px; break-inside: avoid; }
+  .bil-signature-print .bil-signature-line { display: flex; justify-content: space-between; gap: 30px; }
+  .bil-signature-cell { flex: 1; font-size: 11px; }
+  .bil-signature-cell-data { max-width: 140px; }
+  .bil-signature-rule { margin-top: 30px; border-top: 1px solid #000; }
 }
 
 /* ════════════════════════════════════════════════════
@@ -1382,7 +1402,7 @@ body {
         </div>
       </div>
 
-      <div class="card">
+      <div class="card" id="bil-card-confronto">
         <div class="card-title">Confronto tra bilance e pesi di riferimento</div>
         <p style="font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.5">
           Il confronto tra le due bilance è il criterio decisivo (bloccante). Il confronto tra pesi F.Sciolli/Blu e lo scarto dal nominale sono informativi: non invalidano la bilancia, ma segnalano un possibile problema sui pesi di riferimento.
@@ -1422,7 +1442,7 @@ body {
         </div>
       </div>
 
-      <div class="card">
+      <div class="card" id="bil-card-notes">
         <div class="card-title">Note aggiuntive (opzionale)</div>
         <textarea class="form-textarea" id="bil-notes" placeholder="Osservazioni, anomalie, pulizia effettuata, ripetizione prova, manutenzione o limitazioni d'uso."></textarea>
       </div>
@@ -1432,15 +1452,21 @@ body {
 
       <div class="print-only bil-signature-print">
         <div class="bil-signature-line">
-          <span>Firma responsabile QMS: _________________________________</span>
-          <span>Data: _______________</span>
+          <div class="bil-signature-cell">
+            <div class="bil-signature-label">Firma responsabile QMS</div>
+            <div class="bil-signature-rule"></div>
+          </div>
+          <div class="bil-signature-cell bil-signature-cell-data">
+            <div class="bil-signature-label">Data</div>
+            <div class="bil-signature-rule"></div>
+          </div>
         </div>
       </div>
 
       <button class="btn btn-primary no-print" id="btn-bilance-save" style="margin-top:14px" onclick="salvaBilance()">
         💾 Salva controllo bilance
       </button>
-      <button class="btn btn-ghost no-print" id="btn-bilance-print" style="margin-top:12px;display:none" onclick="window.print()">
+      <button class="btn btn-ghost no-print" id="btn-bilance-print" style="margin-top:12px;display:none" onclick="stampaBilance()">
         🖨️ Stampa / Salva PDF
       </button>
       <button class="btn btn-outline no-print" id="btn-bilance-nuovo" style="margin-top:12px;display:none" onclick="nuovaVerifica()">
@@ -3449,6 +3475,37 @@ async function completaBilanceEsistente(docId) {
     btn.textContent = '💾 Completa e salva';
     showToast('Salvataggio non riuscito: ' + bilErroreLeggibile(e), 'warn');
   }
+}
+
+function stampaBilance() {
+  var btn = document.getElementById('btn-bilance-print');
+  var testoOriginale = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Apertura stampa...'; }
+  showToast('🖨️ Apertura anteprima di stampa...', 'ok');
+
+  var apertaCorrettamente = false;
+  var onBeforePrint = function() { apertaCorrettamente = true; };
+  window.addEventListener('beforeprint', onBeforePrint);
+
+  var ripristina = function() {
+    window.removeEventListener('beforeprint', onBeforePrint);
+    if (btn) { btn.disabled = false; btn.textContent = testoOriginale; }
+  };
+
+  try {
+    window.print();
+  } catch (e) {
+    ripristina();
+    showToast('Stampa non disponibile su questo dispositivo: ' + ((e && e.message) || 'errore sconosciuto'), 'warn');
+    return;
+  }
+
+  setTimeout(function() {
+    ripristina();
+    if (!apertaCorrettamente) {
+      showToast('Anteprima di stampa non apribile qui. Su iPad apri la pagina in Safari (non dall\'icona sulla schermata Home) e riprova, oppure usa Condividi → Stampa.', 'warn');
+    }
+  }, 1200);
 }
 
 async function salvaBilance() {
