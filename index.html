@@ -756,7 +756,7 @@ body {
   /* Da qui in poi (zero, note, esito, firma) sempre a pagina 2 */
   #bil-card-zero { break-before: page; }
 
-  .bil-signature-print { margin-top: 40px; }
+  .bil-signature-print { margin-top: 74px; }
   .bil-signature-print .bil-signature-line {
     margin-top: 36px; border-top: 1px solid #000; padding-top: 4px;
     display: flex; justify-content: space-between; font-size: 11px;
@@ -1012,7 +1012,7 @@ body {
       <div class="logo-header-divider"></div>
       <div class="logo-header-text">
         <div class="logo-header-name">QMS Temperature</div>
-        <div class="logo-header-sub">Storico registrazioni</div>
+        <div class="logo-header-sub" id="history-hdr-sub">Storico registrazioni</div>
         <div class="header-op-line">👤 <span id="history-hdr-op">—</span></div>
       </div>
       <div class="logo-header-divider"></div>
@@ -1303,6 +1303,11 @@ body {
     <div class="content">
 
       <div class="bil-pending-indicator no-print"></div>
+
+      <div class="form-top-actions no-print">
+        <button class="btn btn-ghost" type="button" onclick="apriStoricoRegistrazioni('screen-bilance', 'bilance')">📋 Storico tarature bilance</button>
+        <button class="btn btn-ghost" type="button" style="margin-top:10px" onclick="apriBilancePendingList()">🗂️ Tarature salvate solo in locale</button>
+      </div>
 
       <div class="bil-note">
         Verifica interna QMS con pesi prestati non accompagnati da certificato di taratura. Il controllo non ha valore di taratura accreditata o verifica metrologica ufficiale: serve a confermare l'idoneità pratica delle bilance per l'uso ordinario in farmacia. In caso di non conformità, dubbio o uso critico, sospendere l'uso della bilancia interessata e richiedere verifica esterna o manutenzione.
@@ -1758,6 +1763,14 @@ var OPERATORI_FALLBACK = [
 ];
 var OPERATORI = OPERATORI_FALLBACK.slice();
 
+// Chi può eliminare registrazioni dallo storico (deve corrispondere a isConsoleAdminUser() in firestore.rules)
+var QMS_ADMIN_EMAILS = ['danielebc@bluewin.ch', 'valentina@farmacia.ascona.ch'];
+function isOperatoreAdminQms() {
+  var op = state.operatoreCorrente;
+  var email = op && op.emailFirebase ? String(op.emailFirebase).toLowerCase() : '';
+  return QMS_ADMIN_EMAILS.indexOf(email) !== -1;
+}
+
 // ─────────────────────────────────────────────
 // CONFIGURAZIONE ZONE
 // ─────────────────────────────────────────────
@@ -1822,6 +1835,7 @@ var state = {
   recordCorrente: null,
   storicoRecords: [],
   historyBackTarget: 'screen-login',
+  historyFilterTipo: null,
   flowType: 'temperature',
   bilanceData: {},
   bilanceBackTarget: 'screen-login',
@@ -2228,12 +2242,15 @@ function buildStoricoItemHtml(record, index) {
 function renderStoricoRegistrazioni() {
   var list = document.getElementById('history-list');
   if (!list) return;
-  if (!state.storicoRecords.length) {
+  var byTipo = state.storicoRecords.filter(function(record) {
+    return !state.historyFilterTipo || record._tipo === state.historyFilterTipo;
+  });
+  if (!byTipo.length) {
     list.innerHTML = '<div class="history-empty">Nessuna registrazione disponibile.</div>';
     return;
   }
   var query = String(document.getElementById('history-search').value || '').trim().toLowerCase();
-  var filtered = state.storicoRecords.filter(function(record) {
+  var filtered = byTipo.filter(function(record) {
     if (!query) return true;
     var hay = [
       record.mese,
@@ -2256,10 +2273,12 @@ function renderStoricoRegistrazioni() {
   }).join('');
 }
 
-function apriStoricoRegistrazioni(fromScreen) {
+function apriStoricoRegistrazioni(fromScreen, filterTipo) {
   state.historyBackTarget = fromScreen || state.historyBackTarget || 'screen-login';
-  var currentDate = document.getElementById('qms-hdr-date').textContent || document.getElementById('form-hdr-date').textContent || '—';
-  var currentTime = document.getElementById('qms-hdr-time').textContent || document.getElementById('form-hdr-time').textContent || '—';
+  state.historyFilterTipo = filterTipo || null;
+  document.getElementById('history-hdr-sub').textContent = filterTipo === 'bilance' ? 'Storico tarature bilance' : 'Storico registrazioni';
+  var currentDate = document.getElementById('qms-hdr-date').textContent || document.getElementById('form-hdr-date').textContent || document.getElementById('bilance-hdr-date').textContent || '—';
+  var currentTime = document.getElementById('qms-hdr-time').textContent || document.getElementById('form-hdr-time').textContent || document.getElementById('bilance-hdr-time').textContent || '—';
   document.getElementById('history-hdr-date').textContent = currentDate;
   document.getElementById('history-hdr-time').textContent = currentTime;
   var opEl = document.getElementById('history-hdr-op');
@@ -2345,6 +2364,7 @@ function buildRecordDetailHtmlBilance(record) {
         '<tr><td>Note</td><td>' + escapeHtml(record.notes || '—') + '</td></tr>' +
         '<tr><td>Archiviato</td><td>' + escapeHtml(formatTimestampLabel(getTimestampValue(record))) + '</td></tr>' +
       '</table>' +
+      (isOperatoreAdminQms() ? '<div style="margin-top:12px"><button class="btn btn-outline" type="button" style="color:var(--danger);border-color:var(--danger)" onclick="eliminaRecordStorico(state.storicoRecords[' + state.storicoRecords.indexOf(record) + '])">🗑️ Elimina registrazione</button></div>' : '') +
     '</div>' +
     '<div class="detail-block">' +
       '<div class="detail-title">Pesate</div>' +
@@ -2393,7 +2413,10 @@ function buildRecordDetailHtml(record) {
         '<tr><td>Esito</td><td>' + escapeHtml(record.nc ? 'Non conformità' : 'Conforme') + '</td></tr>' +
         '<tr><td>Archiviato</td><td>' + escapeHtml(formatTimestampLabel(getTimestampValue(record))) + '</td></tr>' +
       '</table>' +
-      '<div style="margin-top:12px"><button class="btn btn-ghost" type="button" onclick="downloadHistoryPdf(' + state.storicoRecords.indexOf(record) + ')">📄 PDF stampabile</button></div>' +
+      '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">' +
+        '<button class="btn btn-ghost" type="button" onclick="downloadHistoryPdf(' + state.storicoRecords.indexOf(record) + ')">📄 PDF stampabile</button>' +
+        (isOperatoreAdminQms() ? '<button class="btn btn-outline" type="button" style="color:var(--danger);border-color:var(--danger)" onclick="eliminaRecordStorico(state.storicoRecords[' + state.storicoRecords.indexOf(record) + '])">🗑️ Elimina registrazione</button>' : '') +
+      '</div>' +
     '</div>' +
     '<div class="detail-block">' +
       '<div class="detail-title">Esito zone</div>' +
@@ -2410,6 +2433,28 @@ function openStoricoDettaglio(index) {
   document.getElementById('sensor-modal-title').textContent = 'Storico registrazione';
   document.getElementById('sensor-modal-body').innerHTML = buildRecordDetailHtml(record);
   document.getElementById('sensor-modal').classList.add('active');
+}
+
+async function eliminaRecordStorico(record) {
+  if (!record || !record._id) {
+    showToast('Impossibile eliminare: identificativo mancante', 'warn');
+    return;
+  }
+  if (!isOperatoreAdminQms()) {
+    showToast('Non hai i permessi per eliminare questa registrazione', 'warn');
+    return;
+  }
+  if (!confirm('Eliminare definitivamente questa registrazione dallo storico? L\'operazione non è reversibile.')) return;
+  var collezione = record._tipo === 'bilance' ? 'qms_bilance' : 'qms_temperature';
+  try {
+    await firestoreDB.collection(collezione).doc(record._id).delete();
+    state.storicoRecords = state.storicoRecords.filter(function(r) { return r !== record; });
+    document.getElementById('sensor-modal').classList.remove('active');
+    renderStoricoRegistrazioni();
+    showToast('Registrazione eliminata', 'ok');
+  } catch (e) {
+    showToast('Eliminazione non riuscita: ' + ((e && e.code) || (e && e.message) || 'errore sconosciuto'), 'warn');
+  }
 }
 
 function downloadHistoryPdf(index) {
@@ -3047,6 +3092,9 @@ function calcolaBilance() {
 function avviaBilance() {
   var dt = getDataOra();
   state.flowType = 'bilance';
+  document.querySelectorAll('#screen-bilance input, #screen-bilance select, #screen-bilance textarea').forEach(function(el) {
+    el.disabled = false;
+  });
   state.bilanceData = {
     data: dt.data, ora: dt.ora, mese: dt.mese, isoMese: dt.isoMese,
     operatore: state.operatoreCorrente.sigla,
@@ -3116,15 +3164,27 @@ function bilPendingGetAll() {
 function bilPendingSetAll(list) {
   try { localStorage.setItem(BIL_PENDING_KEY, JSON.stringify(list)); } catch (e) {}
 }
-function bilPendingAdd(record) {
+function bilPendingAdd(record, initialError) {
   var list = bilPendingGetAll();
-  list.push({ localId: 'local_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), record: record });
+  list.push({ localId: 'local_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), record: record, lastError: initialError || null });
   bilPendingSetAll(list);
   aggiornaIndicatorePendingBilance();
 }
 function bilPendingRemove(localId) {
   bilPendingSetAll(bilPendingGetAll().filter(function(p){ return p.localId !== localId; }));
   aggiornaIndicatorePendingBilance();
+}
+function bilPendingSetError(localId, message) {
+  var list = bilPendingGetAll();
+  list.forEach(function(p) { if (p.localId === localId) p.lastError = message || null; });
+  bilPendingSetAll(list);
+}
+function bilErroreLeggibile(e) {
+  if (e && e.message === 'timeout') return 'Tempo scaduto dopo ' + (BIL_SAVE_TIMEOUT_MS / 1000) + ' secondi — verifica la connessione.';
+  if (e && e.code === 'permission-denied') return 'Accesso negato dal server (permission-denied) — contattare l\'amministratore QMS.';
+  if (e && e.code) return 'Errore server: ' + e.code;
+  if (e && e.message) return e.message;
+  return 'Errore sconosciuto.';
 }
 function aggiornaIndicatorePendingBilance() {
   var count = bilPendingGetAll().length;
@@ -3137,6 +3197,126 @@ function aggiornaIndicatorePendingBilance() {
       el.textContent = '';
     }
   });
+}
+
+function apriBilancePendingList() {
+  var list = bilPendingGetAll();
+  var body = document.getElementById('sensor-modal-body');
+  document.getElementById('sensor-modal-title').textContent = 'Tarature salvate solo in locale';
+  if (!list.length) {
+    body.innerHTML = '<div class="history-empty">Nessuna taratura in attesa di sincronizzazione su questo dispositivo.</div>';
+  } else {
+    body.innerHTML = '<div class="history-list">' + list.map(function(item) {
+      var r = item.record || {};
+      var ts = escapeHtml(((r.data || '—') + ' ' + (r.ora || '')).trim());
+      var esitoBadge = r.esito === 'conforme'
+        ? '<span class="badge badge-ok">CONFORME</span>'
+        : r.esito === 'non_conforme'
+          ? '<span class="badge badge-nc">NON CONFORME</span>'
+          : '<span class="badge badge-gray">INCOMPLETO</span>';
+      var erroreHtml = item.lastError
+        ? '<div style="font-size:11px;color:var(--danger);margin-top:4px">⚠️ Ultimo tentativo fallito: ' + escapeHtml(item.lastError) + '</div>'
+        : '';
+      return '<div class="history-item" style="cursor:default">' +
+        '<div class="history-item-top">' +
+          '<div>' +
+            '<div class="history-item-title">⚖️ Controllo annuale bilance</div>' +
+            '<div class="history-item-meta">' + ts + ' · ' + escapeHtml(r.operatoreNome || r.operatore || 'Operatore non indicato') + '</div>' +
+          '</div>' +
+          esitoBadge +
+        '</div>' +
+        '<div class="history-item-zones">⏳ In attesa di sincronizzazione cloud</div>' +
+        erroreHtml +
+        '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">' +
+          '<button class="btn btn-outline btn-sm" type="button" onclick="apriBilancePendingRecord(\'' + item.localId + '\')">👁️ Apri e stampa</button>' +
+          '<button class="btn btn-outline btn-sm" type="button" id="bil-retry-' + item.localId + '" onclick="bilRiprovaSingolo(\'' + item.localId + '\')">🔄 Riprova salvataggio</button>' +
+        '</div>' +
+      '</div>';
+    }).join('') + '</div>';
+  }
+  document.getElementById('sensor-modal').classList.add('active');
+}
+
+function apriBilancePendingRecord(localId) {
+  var item = bilPendingGetAll().filter(function(p){ return p.localId === localId; })[0];
+  if (!item) return;
+  var inCorso = document.getElementById('btn-bilance-save') && document.getElementById('btn-bilance-save').style.display !== 'none'
+    && document.getElementById('bil-weightsOwner').value.trim() !== '';
+  if (inCorso && !confirm('Aprire questa taratura salvata in locale sostituisce i dati del controllo in corso non ancora salvato. Continuare?')) return;
+  document.getElementById('sensor-modal').classList.remove('active');
+  caricaBilanceRecordSalvato(item.record);
+}
+
+async function bilRiprovaSingolo(localId) {
+  var item = bilPendingGetAll().filter(function(p){ return p.localId === localId; })[0];
+  if (!item) return;
+  var btn = document.getElementById('bil-retry-' + localId);
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Sincronizzazione...'; }
+
+  if (!FIREBASE_ENABLED || !firestoreDB) {
+    bilPendingSetError(localId, 'Connessione cloud non disponibile su questo dispositivo.');
+    apriBilancePendingList();
+    return;
+  }
+  try {
+    await bilConTimeout(firestoreDB.collection('qms_bilance').add(item.record), BIL_SAVE_TIMEOUT_MS);
+    bilPendingRemove(localId);
+    showToast('Controllo bilance del ' + (item.record.data || '') + ' sincronizzato', 'ok');
+    apriBilancePendingList();
+  } catch (e) {
+    bilPendingSetError(localId, bilErroreLeggibile(e));
+    apriBilancePendingList();
+  }
+}
+
+function caricaBilanceRecordSalvato(record) {
+  state.flowType = 'bilance';
+  state.bilanceBackTarget = state.bilanceBackTarget || 'screen-form';
+  state.bilanceData = Object.assign({}, record);
+  state.recordCorrente = record;
+
+  document.getElementById('bilance-op-name').textContent = record.operatoreNome || record.operatore || '—';
+  document.getElementById('bilance-hdr-date').textContent = record.data || '—';
+  document.getElementById('bilance-hdr-time').textContent = record.ora || '—';
+
+  document.getElementById('bil-qms').value = record.responsabileQms || '';
+  document.getElementById('bil-location').value = record.locale || '';
+  document.getElementById('bil-weightsOwner').value = record.weightsOwner || '';
+  document.getElementById('bil-weightsId').value = record.weightsId || '';
+  document.getElementById('bil-weightsCert').value = record.weightsCert || 'Non certificati';
+  document.getElementById('bil-weightsState').value = record.weightsState || 'Integro e pulito';
+  document.getElementById('bil-cond1').checked = !!record.cond1;
+  document.getElementById('bil-cond2').checked = !!record.cond2;
+  document.getElementById('bil-setraZero').value = record.setraZero != null ? record.setraZero : '';
+  document.getElementById('bil-setraZeroTol').value = record.setraZeroTol != null ? record.setraZeroTol : '0.005';
+  document.getElementById('bil-mettlerZero').value = record.mettlerZero != null ? record.mettlerZero : '';
+  document.getElementById('bil-mettlerZeroTol').value = record.mettlerZeroTol != null ? record.mettlerZeroTol : '0.02';
+  document.getElementById('bil-notes').value = record.notes || '';
+
+  createBilanceRows();
+  (record.rows || []).forEach(function(r) {
+    var prefix = r.balance + '_' + r.weight;
+    var v1 = document.getElementById(prefix + '_v1');
+    var v2 = document.getElementById(prefix + '_v2');
+    var t1 = document.getElementById(prefix + '_t1');
+    var t2 = document.getElementById(prefix + '_t2');
+    var note = document.getElementById(prefix + '_note');
+    if (v1) v1.value = r.vecchio1 != null ? r.vecchio1 : '';
+    if (v2) v2.value = r.vecchio2 != null ? r.vecchio2 : '';
+    if (t1) t1.value = r.temu1 != null ? r.temu1 : '';
+    if (t2) t2.value = r.temu2 != null ? r.temu2 : '';
+    if (note) note.value = r.nota || '';
+  });
+  calcolaBilance();
+
+  document.querySelectorAll('#screen-bilance input, #screen-bilance select, #screen-bilance textarea').forEach(function(el) {
+    el.disabled = true;
+  });
+  document.getElementById('btn-bilance-save').style.display = 'none';
+  document.getElementById('btn-bilance-print').style.display = '';
+  document.getElementById('btn-bilance-nuovo').style.display = '';
+
+  showScreen('screen-bilance');
 }
 
 async function sincronizzaBilancePendenti() {
@@ -3153,6 +3333,7 @@ async function sincronizzaBilancePendenti() {
       bilPendingRemove(item.localId);
       showToast('Controllo bilance del ' + (item.record.data || '') + ' sincronizzato', 'ok');
     } catch (e) {
+      bilPendingSetError(item.localId, bilErroreLeggibile(e));
       console.warn('Risincronizzazione bilance fallita:', item.localId, e && (e.code || e.message));
       break; // se il primo non riesce, la rete probabilmente non c'è ancora: riprova al prossimo trigger
     }
@@ -3209,19 +3390,19 @@ async function salvaBilance() {
       state.firestoreId = docRef.id;
       saved = true;
     } catch (e) {
-      errorInfo = (e && e.message === 'timeout') ? 'tempo scaduto dopo ' + (BIL_SAVE_TIMEOUT_MS / 1000) + ' secondi' : ((e && e.code) || (e && e.message) || 'errore sconosciuto');
+      errorInfo = bilErroreLeggibile(e);
       console.error('Firestore save error (bilance):', errorInfo);
     }
   } else {
-    errorInfo = 'connessione cloud non disponibile';
+    errorInfo = 'Connessione cloud non disponibile su questo dispositivo.';
   }
 
   if (saved) {
     mostraModaleSalvataggioBilance('ok', 'Controllo salvato', 'Il controllo bilance è stato salvato correttamente sul cloud.');
   } else {
-    bilPendingAdd(record);
+    bilPendingAdd(record, errorInfo);
     mostraModaleSalvataggioBilance('warn', 'Salvato solo in locale',
-      'Il cloud non è stato raggiunto (' + errorInfo + '). Il controllo è stato salvato su questo dispositivo e verrà sincronizzato automaticamente alla prossima connessione disponibile. Puoi comunque stampare.');
+      'Il cloud non è stato raggiunto (' + errorInfo + '). Il controllo è stato salvato su questo dispositivo e verrà sincronizzato automaticamente alla prossima connessione disponibile, oppure puoi riprovare manualmente da "Tarature salvate solo in locale". Puoi comunque stampare.');
   }
 
   state.recordCorrente = record;
